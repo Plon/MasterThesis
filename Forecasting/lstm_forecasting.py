@@ -83,7 +83,7 @@ if __name__ == '__main__':
     dataset = dataframe['Close'].values
     dataset = dataset.astype('float32')
 
-    #Add trailing 1-day, 7-day, 30-day returns to each state
+    #Add trailing 1-tick, 7-tick, 30-tick returns to each state
     states = add_trailing_returns(dataset, [1, 7, 30])
     num_features = states.shape[1]-1
 
