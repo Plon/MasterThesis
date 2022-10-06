@@ -57,7 +57,7 @@ The discount factor $\gamma \in [0,1]$ determines present value of future reward
 The initial state of the MDP is $s_0$. 
 This interaction with a MDP produces a sequence known as a trajectory: $S_0, A_0, R_1, S_1, A_1, R_2, S_2, A_2, R_3, ...$. 
 For continuing tasks this sequence is infinite. 
-A finite MDP is a MDP with with finite state space $\mathcal{S}, action space \mathcal{A}, and reward space \mathcal{R}$. 
+A finite MDP is a MDP with with finite state space $\mathcal{S}$, action space $\mathcal{A}$, and reward space $\mathcal{R}$. 
 
 
 ## Policies and Value Functions. 
