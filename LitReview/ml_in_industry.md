@@ -4,9 +4,8 @@ However, just like oil, raw data has little value in itself.
 Only through refinement does it become valuable. 
 Only when data is gathered and analyzed does it become valuable information. 
 There is no shortage of data. 
-64.2 zettabytes of data were created in 2020 \cite{stat9sta}. 
-The Statista Research Department estimates that in the coming years the amount of c
-data created will grow at a compound annual rate of 19.2 % \cite{stat9sta}. 
+Sixty-four zettabytes of data were created in 2020 alone\cite{stat9sta}. 
+The Statista Research Department estimates that in the coming years the amount of data created will grow at a compound annual rate of 19.2 % \cite{stat9sta}. 
 Consequently, in 2025 there will be three times as much data generated as just five years ago. 
 This enormous amount of data presents a massive opportunity for those who can extract valuable information from it. 
 Doing that, however, is challenging. 
