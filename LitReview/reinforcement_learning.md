@@ -1,5 +1,5 @@
 # Machine Learning 
-Machine Learning (ML) is one of the most prominent research areas in information technology (IT), and a central part of modern life. 
+Machine Learning (ML) is one of the most prominent research areas in information technology (IT) and a central part of modern life. 
 It is the field of study that gives computers the ability to learn without being explicitly programmed \cite{marsland2011machine}. 
 The field grew out of Artificial Intelligence (AI) in the late 1970s.
 ML has significant real-world applications like computer vision, speech recognition, and robot control.
@@ -24,7 +24,7 @@ There are three primary ML paradigms; Supervised Learning, Unsupervised Learning
 
 
 # Reinforcement Learning
-Reinforcement Learning (RL) is a Machine Learning approach where an agent observes an environment, and takes actions based on the state of the environment. 
+Reinforcement Learning (RL) is a Machine Learning approach where an agent observes an environment and takes actions based on the state of the environment. 
 Actions influence immediate rewards and the subsequent state of the environment and thus future rewards. 
 The agent refines a policy to maximize the total rewards it receives. 
 This agent-environment interaction is often modeled as a Markov Decision Process (MDP). 
@@ -32,16 +32,17 @@ This agent-environment interaction is often modeled as a Markov Decision Process
 
 RL has two distinguishing features from other ML approaches: trial-and-error search and delayed reward \cite{sutton2018reinforcement}. 
 Delayed reward refers to the previously mentioned fact that the agent's actions determine the next state and thus future rewards. Therefore, an agent might perform an action that will be valuable at a later stage without knowing it at the time it performs the action. 
-Additionally, the RL agent needs to use trial-and-error search in order to get a sense of the reward distribution of the different actions. 
-Initially the agent doesn’t know the value of actions and needs to try different actions at random, and this is called exploration.
+Additionally, the RL agent needs to use a trial-and-error search in order to get a sense of the reward distribution of the different actions. 
+Initially, the agent doesn’t know the value of actions and needs to try different actions at random, this is called exploration.
 Using that experience the agent can start deterministically choosing actions that generate the most rewards in a state, and this is called exploitation. 
 A key part of RL is striking a balance between exploration and exploitation.
-If the dynamics of the environment is non-stationary the agent needs to continuously explore to ensure that it is taking the optimal actions as it cannot rely on old estimates. 
+If the dynamics of the environment are non-stationary the agent needs to continuously explore to ensure that it is taking the optimal actions as it cannot rely on old estimates. 
+
 
 
 
 ## Markov Decision Process 
-A Markov Decision Process (MDP) is a stochastic control process, and a classical formalization of sequential decision making. 
+A Markov Decision Process (MDP) is a stochastic control process and a classical formalization of sequential decision-making. 
 MPDs are extensions of Markov chains with actions and rewards. 
 MDPs follow Markov property of the future state depending only on the current state $P(X_n=x_n | X_{n-1}=x_{n-1},...,X_0=x_0)=P(X_n=x_n | X_{n-1}=x_{n-1})$. 
 
@@ -50,25 +51,25 @@ MDPs follow Markov property of the future state depending only on the current st
 A MPD is a 6-tuple $(\mathcal{S}, \mathcal{A}, p, \mathcal{R}, \gamma, s_0)$.
 The agent interacts with the environment at discrete time steps $t=0,1,2,3,...$. 
 At each time step $t$, the agent recieves the state of the environment $S_t \in \mathcal{S}$. 
-Based on that information the agent chooses one of the actions that is possible in the current state $A_t\in A(s)$. 
+Based on that information the agent chooses one of the actions that are possible in the current state $A_t\in A(s)$. 
 When an agent is in a state and performs an action, the transition function $p(s', r | s, a) = Pr\{S_t=s', R_t=r | S_{t-1}=s, A_{t-1}=a\}$ specifies which state the agent will end up in next and what reward it will recieve. 
 At the following step the agent recieves a numerical reward $R_{t+1} \in \mathcal{R} \subset \mathbb{R}$, and the next state of the environment $S_{t+1}$. 
 The discount factor $\gamma \in [0,1]$ determines present value of future rewards. 
 The initial state of the MDP is $s_0$. 
 This interaction with a MDP produces a sequence known as a trajectory: $S_0, A_0, R_1, S_1, A_1, R_2, S_2, A_2, R_3, ...$. 
 For continuing tasks this sequence is infinite. 
-A finite MDP is a MDP with with finite state space $\mathcal{S}$, action space $\mathcal{A}$, and reward space $\mathcal{R}$. 
+A finite MDP is a Markov decision process with finite state space $\mathcal{S}$, action space $\mathcal{A}$, and reward space $\mathcal{R}$. 
 
 
 ## Policies and Value Functions. 
-Most RL algorithms estimate the value of being in certain states or the value of being in a certain states and performing certain actions. 
-A state's value is not only based on the reward an agent recieves while in it. It must also take into account the series of future discounted returns. 
+Most RL algorithms estimate the value of being in certain states or the value of being in certain states and performing certain actions. 
+A state's value is not only based on the reward an agent receives while in it. It must also take into account the series of future discounted returns. 
 $G_t$ is defined as the future discounted return
 \begin{equation}
 G_t = \sum_{k=0}^\infty \gamma^k R_{t+k+1} = R_{t+1}+ \gamma G_{t+1} 
 \end{equation}
 
-A RL agent's objective is to maximize $G_t$. 
+A reinforcement learning agent's objective is to maximize $G_t$. 
 It is apparent that $G_t$ will be determined by the actions the agent takes. 
 To maximize $G_t$, the agent creates and optimizes a policy. 
 A policy $\pi : \mathcal{S} \rightarrow \Delta (\mathcal{A})$ is a mapping from states to a probability distribution over the action space. It is a probability measure $\pi (a | s)$, which is the probability the agent performs action $A_t = a$, given that the current state is $S_t = s$. 
@@ -76,22 +77,20 @@ Reinforcement learning algorithms determine how policies are adjusted through ex
 
 The value function $v_\pi(s)$ is the expected return when starting in state $s$ and following policy $\pi$. It is defined $\forall s \in \mathcal{S}$ as 
 \begin{equation}
-v_\pi(s)= \mathbb{E}_\pi[G_t | S_t = s] = \sum_{a \in \mathcal{A}(s)} \pi(s|a) \cdot q_{\pi}(s,a)
+v_\pi(s)= \mathbb{E}_\pi[G_t | S_t = s] = \sum_{a \in \mathcal{A}(s)} \pi(s|a) \cdot q_{\pi}(s,a)
 \end{equation}
 
 
 The action-value function $q_\pi(s,a)$ is the expected return when performing action $a$ in state $s$, and then following the policy $\pi$. It is defined $\forall s \in \mathcal{S}, a \in \mathcal{A}(s)$ as 
 \begin{equation}
-q_\pi(s,a)= \mathbb{E}_\pi[G_t | S_t = s, A_t = a] 
+q_\pi(s,a)= \mathbb{E}_\pi[G_t | S_t = s, A_t = a] 
 \end{equation}
-
-
 
 
 
 ## Bellman Equations
 Value and action-value functions can be calculated using the Bellman Equations. 
-These equations define a recursive relationship between immediate rewards and the discounted future rewards. 
+These equations define a recursive relationship between immediate rewards and discounted future rewards. 
 Inserting the result from (1) into the value function (2) yields
 \begin{equation}
 v_\pi(s) = \mathbb{E}_\pi [R_{t+1}+\gamma G_{t+1} | S_t = s]
@@ -99,12 +98,12 @@ v_\pi(s) = \mathbb{E}_\pi [R_{t+1}+\gamma G_{t+1} | S_t = s]
 The value of a state $S_t = s$ when following policy $\pi$ is thus the expected reward $R_{t+1}$ plus the discounted future returns $\gamma G_{t+1}$. 
 The expectation for the next reward $R_{t+1}$ can be calculated by summing over all possible action choices weighted by the probability of choosing them according to the policy $\pi$ 
 \begin{equation}
-v_\pi(s) = \sum_{a\in \mathcal{A}} \pi(a|s) \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a)[r+\gamma \mathbb{E}_\pi[G_{t+1} | S_{t+1} = s'] ]
+v_\pi(s) = \sum_{a\in \mathcal{A}} \pi(a|s) \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a)[r+\gamma \mathbb{E}_\pi[G_{t+1} | S_{t+1} = s'] ]
 \end{equation}
 The last expectation is the expected returns from the next state $s'$, i.e., the value function $v_\pi(s')$. 
 The Bellman Equation for the value function is defined $\forall s \in \mathcal{S}$ as 
 \begin{equation}
-v_\pi(s) = \sum_{a\in \mathcal{A}} \pi(a|s) \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a)[r+\gamma v_\pi (s')] = \sum_{a\in \mathcal{A}} \pi(a|s) \cdot q_\pi(s,a)
+v_\pi(s) = \sum_{a\in \mathcal{A}} \pi(a|s) \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a)[r+\gamma v_\pi (s')] = \sum_{a\in \mathcal{A}} \pi(a|s) \cdot q_\pi(s,a)
 \end{equation}
 
 > Figure with bellman equation backup diagram for state value function
@@ -115,13 +114,13 @@ q_\pi(s,a) = \mathbb{E}_\pi [R_{t+1}+\gamma G_{t+1} | S_t = s, A_t = a]
 \end{equation}
 Unlike for the value function, the next action $A_t = a$ is already known, therefore
 \begin{equation}
-q_\pi(s,a) = \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a)[r+\gamma \mathbb{E}_\pi[G_{t+1} | S_{t+1} = s'] ]
+q_\pi(s,a) = \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a)[r+\gamma \mathbb{E}_\pi[G_{t+1} | S_{t+1} = s'] ]
 \end{equation}
 The last expectation, which is the value function, can be swapped out for the action-value function using the result from (2). 
 Thus, the Bellman Equation can be defined. 
 The Bellman Equation for action-value function is defined $\forall s \in \mathcal{S}, a \in \mathcal{A}(s)$ as 
 \begin{equation}
-q_\pi(s,a) = \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a) \left[r+\gamma \sum_{a' \in \mathcal{A}}\pi(a'|s') \cdot q_\pi(s', a') \right] 
+q_\pi(s,a) = \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a) \left[r+\gamma \sum_{a' \in \mathcal{A}}\pi(a'|s') \cdot q_\pi(s', a') \right] 
 \end{equation}
 
 
@@ -130,7 +129,7 @@ q_\pi(s,a) = \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a) \left
 
 
 ## Optimal Policies and Value Functions. 
-The goal of RL is for the agent to learn an optimal or near-optimal policy that maximizes the reward it recieves. 
+The goal of RL is for the agent to learn an optimal or near-optimal policy that maximizes the reward it receives. 
 An optimal policy is denoted by $\pi_*$. There may be more than one. 
 The optimal value function $v_*$ is defined $\forall s \in \mathcal{S}$ as 
 \begin{equation}
@@ -146,40 +145,51 @@ To satisfy the recursive relationship condition for the Bellman equations, the o
 The Bellman optimality equation state that the value of a state when following an optimal policy is equal to the action-value of taking the optimal action in that state. 
 The Bellman optimality equations for the optimal value function $v_*$ is 
 \begin{align*}
-	v_*(s)  &= \max_{a \in \mathcal{A}(s)} q_\pi_* (s,a) && \\
-	            &= \max_{a \in \mathcal{A}(s)} \mathds{E}_\pi_* [G_t | S_t = s, A_t = a] && \\
-	            &= \max_{a \in \mathcal{A}(s)} \mathds{E}_\pi_* [R_{t+1} + \gamma G_{t+1} | S_t = s, A_t = a] && \\
-	            &= \max_{a \in \mathcal{A}(s)} \mathds{E} [R_{t+1} + \gamma v_*(S_{t+1}) | S_t = s, A_t = a] && \\
-	            &= \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a) [r+\gamma v_*(s')]  && \\
+ v_*(s) &= \max_{a \in \mathcal{A}(s)} q_\pi_* (s,a) && \\
+ &= \max_{a \in \mathcal{A}(s)} \mathds{E}_\pi_* [G_t | S_t = s, A_t = a] && \\
+ &= \max_{a \in \mathcal{A}(s)} \mathds{E}_\pi_* [R_{t+1} + \gamma G_{t+1} | S_t = s, A_t = a] && \\
+ &= \max_{a \in \mathcal{A}(s)} \mathds{E} [R_{t+1} + \gamma v_*(S_{t+1}) | S_t = s, A_t = a] && \\
+ &= \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a) [r+\gamma v_*(s')] && \\
 \end{align*}
 
 The Bellman optimality equations for the optimal action-value function $q_*$ is 
 \begin{align*}
-	q_*(s,a)  &= \mathds{E} [R_{t+1} + \gamma \max_{a'} q_*(S_{t+1}, a') | S_t = s, A_t = a] && \\
-	            &= \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a) [r+\gamma \max_{a'} q_*(s', a')]  && \\
+ q_*(s,a) &= \mathds{E} [R_{t+1} + \gamma \max_{a'} q_*(S_{t+1}, a') | S_t = s, A_t = a] && \\
+ &= \sum_{s' \in \mathcal{S}, r \in \mathcal{R}} p(s', r | s, a) [r+\gamma \max_{a'} q_*(s', a')] && \\
 \end{align*}
 
 
+
+
+## Tabular Methods
+For Markov Decision Processes with finite and not too-large state and action spaces, the approximate values of every state or state-action pair can be stored in a table. This is known as a tabular method. 
+As the agent gains more experience the values will converge to the true values. 
+There are several approaches for solving tabular RL problems. 
+Model-based approaches assume perfect knowledge of the MDP, while model-free approaches require only experience rather than perfect knowledge of the MDP. 
+
+
+
+
 ## Dynamic Programming.
-Dynamic Programming (DP) is a RL algorithm for iteratively evaluate and improve a policy using Bellman equations as updates. 
-It assumes perfect knowledge of the MDP, i.e., a finite MDP with where the transition function is known.
+Dynamic Programming (DP) is a model-based RL algorithm for iteratively evaluating and improving a policy using Bellman equations as updates. 
+It assumes perfect knowledge of the MDP, i.e., a finite MDP where the transition function is known.
 DP uses value functions to organize and structure the search for good policies. 
 Once the optimal value function (or action-value function) is found, obtaining the optimal policy is trivial. 
 
 The dynamic programming approach can be divided into two steps: policy evaluation and policy improvement. 
-Policy evaluation consists of computing the value function  for some policy $\pi$ using the Bellman equation. 
+Policy evaluation consists of computing the value function for some policy $\pi$ using the Bellman equation. 
 Policy improvement consists of modifying the old policy $\pi$ to greedily choose the optimal action $a$ in state $s$ and otherwise follow the old policy $\pi$. 
 
-The massive assumption of perfect knowledge of the MDP, combined with being very computationally expensive, makes DP not very usable in real world applications. 
+The massive assumption of perfect knowledge of the MDP, combined with being very computationally expensive, makes DP not very usable in real-world applications. 
 Nevertheless, they are theoretically important, and most RL algorithms build on them. 
 
 
 
 ## Monte Carlo Methods.
-In most real world cases the dynamics of the environment is not known, i.e., the transition function $p(s', r | s, a)$ is not known. 
-Monte Carlo Methods (MCM) is a way of using simulated experience with the environment to learn optimal behaviour, without knowing the environments dynamics and being able to compute the value function directly like in dynamic programming. 
+In most real-world cases the dynamics of the environment are not known, i.e., the transition function $p(s', r | s, a)$ is not known. 
+Monte Carlo Methods (MCM) is a way of using simulated experience with the environment to learn optimal behavior, without knowing the dynamics of the environment and being able to compute the value function directly like in dynamic programming. 
 The approach is based on averaging sample returns after episodes, so it does not bootstrap, and therefore does not introduce bias. 
-However, it can not update in a step-by-step (online) sense, only works for episodic tasks. 
+However, it can not update in a step-by-step (online) sense and only works for episodic tasks. 
 
 MCM follows the same pattern as dynamic programming of policy evaluation and policy improvement. 
 The policy evaluation step is based on the idea that the average returns observed after visits to a state will converge to the true value. 
@@ -193,17 +203,17 @@ Exploring starts is a way to resolve this issue by giving every state-action pai
 
 Monte Carlo methods can be used both on- and off-policy.
 On-policy is when the same policy that is being evaluated and improved is also used to generate trajectories. 
-Off-policy is when a different policy is used to generate the trajetories. 
+Off-policy is when a different policy is used to generate the trajectories. 
 
 
 
 
 ## Temporal Difference Learning.
-Temporal-difference (TD) learning is combines dynamic programming and Monte Carlo methods to make a learning algorithm that learns from experience and does not require knowledge of the dynamics of the environment, and is online. 
+Temporal-difference (TD) learning combines dynamic programming and Monte Carlo methods to make a learning algorithm that learns from experience and does not require knowledge of the dynamics of the environment and is online. 
 The general idea of TD learning is to adjust the Q-values and policy after every observation, and not only after every episode like MCM. 
-Since TD learning is fully online it can be used in continous tasks. 
+Since TD learning is fully online it can be used in continuous tasks. 
 
-The TD prediction for the value function is updated every step. 
+The TD prediction for the value function is updated at every step. 
 The update is given as $V(S_t) \leftarrow V(S_t) + \alpha [R_{t+1} + \gamma V(S_{t+1}) - V(S_t)]$, where $\alpha \in (0,1]$ is the learning rate. 
 The TD error $\delta_t = R_{t+1} + \gamma V(S_{t+1}) - V(S_t)$ is the estimation error made at step $t$. 
 The update is bootstrapping, and therefore introduces bias. 
@@ -214,14 +224,7 @@ SARSA is an on-policy TD learning algorithm that immediately update the value of
 Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha [R_{t+1} + \gamma Q(S_{t+1}, A_{t+1}) - Q(S_t, A_t)]
 \end{equation}
 
-Q-learning is an off-policy TD learning algorihm that approximates $q_*$ independent of the policy we follow 
+Q-learning is an off-policy TD learning algorithm that approximates $q_*$ independent of the policy that is followed 
 \begin{equation}
 Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha [R_{t+1} + \gamma \max_a Q(S_{t+1}, a) - Q(S_t, A_t)]
 \end{equation}
-
-
-
-
-
-## Policy Gradient Methods.
-> See policy_gradient_methods.md
