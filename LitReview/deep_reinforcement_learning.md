@@ -1,11 +1,13 @@
 # Deep Reinforcement Learning. 
-Deep reinforcement learning combines Deep Learning (DL) and reinforcement learning. 
-It aims to be able to control agents directly from high-dimensional sensory input like vision or sound, without the need for manual feature engineering. 
-Recent advances in deep learning have made it possible to extract high-level features from unprocessed data. 
-Combining deep learning and reinforcement learning can be challenging as DL generally requires labeled training data, while RL learns using reward signals that can be noisy and delayed. 
-Deep learning typically assumes that data is independent and identically distributed, while RL assumes states are highly correlated. 
+Deep reinforcement learning is a research field that combines Deep Learning (DL) and reinforcement learning. 
+In deep RL, one or more of the value function, action-value function, or policy is approximated as an artificial neural network. 
+Recent advances in deep learning have made it possible to extract high-level features from unprocessed data \cite{goodfellow2016deep}. 
+Deep RL aims to be able to control agents directly from high-dimensional sensory input like vision or sound, without the need for manual feature engineering \cite{li2017deep}.
+Combining deep learning and reinforcement learning can be challenging. 
+DL generally requires labeled training data, while RL learns using delayed reward signals. 
+Deep learning typically assumes that data is independent and identically distributed (IID), while RL assumes that states are highly correlated. 
 Deep learning also assumes a fixed underlying data distribution, while RL can change as the policy evolves. 
-
+The combination of nonlinear function approximation and bootstrapping may lead to unstable learning and divergence \cite{sutton2018reinforcement}. 
 
 
 
@@ -49,6 +51,7 @@ In DDPG, the critic is represented by the Q-network and target Q-network, just a
 In addition, two actor neural nets are employed in DDPG. 
 The actor is represented by a deterministic policy function and a target policy network. 
 In the same way as the target Q-network, the target policy is a time-delayed copy of the original network. 
+DDPG's target networks are time-delayed copies of the original, like DQN. However, weights $\theta'$ slowly track the learned weights $\theta$: $\theta' \leftarrow \tau \theta + (1-\tau) \theta'$, using a positive learning rate $\tau \ll 1$.
 The policy function $\mu_{\theta^\mu}(s)$ deterministically maps states to actions and not a probability distribution across an action space as actor-critic methods like A2C. 
 For the policy network, the objective is to maximize expected return, represented by the objective function $J(\theta)=\mathbb{E}[Q_{\theta^Q}(s,a) | s=s_t,a=\mu_{\theta^\mu}(s_t)]$. 
 The policy network is updated using stochastic gradient descent on the stochastic estimate

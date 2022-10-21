@@ -84,7 +84,7 @@ The input layer sends signals to the hidden layer(s) and finally to the output l
 With only one hidden layer and enough hidden nodes with a nonlinear activation function, a neural net can represent almost any continuous function on a compact region of the network's input space to any degree. 
 If the activation function in the hidden layer is linear, then the network is equivalent to a network without hidden layers since linear functions of linear functions are themselves linear. 
 Despite this ability to represent almost any function with only one hidden layer, it may be easier or even required to approximate more complex functions using deeply-layered ANNs \cite{sutton2018reinforcement}.
-
+The class of ML algorithms that use neural nets with multiple layers is known as deep learning \cite{goodfellow2016deep}. Combining deep learning with reinforcement learning is known as deep reinforcement learning. 
 
 
 The simplest neural net is the feedforward network (FNN). 
@@ -98,7 +98,13 @@ There are no cycles where the output of a node can affect its subsequent input.
 Recurrent neural networks (RNNs) define a class of neural nets that allows connection between nodes to create cycles so that outputs from one node affect inputs to another. 
 This enables the networks to exhibit temporal dynamic behavior. 
 They are well suited for analyzing sequential data. 
-Long short-term memory (LSMT) is a form of RNN that recently has been successfully applied to financial time series forecasting. 
+Long short-term memory (LSMT) is a form of RNN that recently has been successfully applied to financial time series forecasting \cite{siami2018forecasting}. 
+
+
+The architecture of neural nets carries an a priori algorithmic preference, known as inductive bias. 
+For certain problems, specific network architectures can significantly outperform more deeply layered FNNs. 
+E.g., convolutional neural networks perform well when dealing with computer vision tasks, while Long Short Term Memory performs well when dealing with sequence data. 
+A neural net inductive bias should be compatible with the bias of the problem it is solving if it is to generalize well out-of-sample. 
 
 
 
@@ -107,16 +113,9 @@ Nevertheless, overfitting is still a potential risk.
 Stochasticity does not necessarily prevent overfitting \cite{zhang2018study}. 
 As deep reinforcement learning is applied to critical domains such as healthcare, finance, and energy infrastructure, the model must generalize out-of-sample. 
 The test performance of deep RL agents that perform optimally during training has been shown to vary greatly \cite{zhang2018study}. 
-Regularization of connection weights lowers the complexity of the network and can mitigate the risk of overfitting \cite{marsland2011machine}. 
 Separate training and testing sets with statistically tied data are recommended when training deep RL agents \cite{zhang2018study}. 
-
-
-
-The architecture of neural nets carries an a priori algorithmic preference, known as inductive bias. 
-For certain problems, specific network architectures can significantly outperform more deeply layered FNNs. 
-E.g., convolutional neural networks perform well when dealing with computer vision tasks, while Long Short Term Memory performs well when dealing with sequence data. 
-A neural net inductive bias should be compatible with the bias of the problem it is solving if it is to generalize well out-of-sample. 
-
+Regularization of connection weights lowers the complexity of the network and can mitigate the risk of overfitting \cite{marsland2011machine}. 
+Dropout is a regularization strategy that has been shown to reduce the risk of overfitting by randomly eliminating non-output nodes and their connections from an ensemble of sub-networks during training \cite{srivastava2014dropout}. 
 
 
 
@@ -132,17 +131,8 @@ For the continuous (undiscounted) case the average rate of reward while followin
  &= \lim_{t \rightarrow \infty} \mathbb{E}[R_t | S_0, A_{0:t-1} \sim \pi] && \\
  &= \sum_{s} \mu(s) \sum_{a} \pi(a|s) \sum_{s',r} p(s', r | s, a)r && \\
 \end{align*}
-
 where $\mu_\pi(s)$ is the steady-state distribution under $\pi$, defined as $\mu_\pi(s) = \lim_{t \rightarrow \infty} Pr\{S_t=s | A_{0:t} \sim \pi \}$, $\forall \pi$, that is assumed to be independent of $S_0$. 
 The system is assumed to be ergodic, i.e., the expectations of being in a state depend only on the policy and MDP transition probabilities, and not on early choices. 
-
-### Discounting
-Temporal discounting can be applied to continuing problems where immediate rewards are valued higher than future rewards. 
-Discounting has the additional benefit of bounding the return. 
-If $\gamma < 1$, then $\sum_k \gamma^k=\dfrac{1}{1-\gamma}$, and $G_t$ is bounded, as long as $R_t$ is also bounded. 
-One could measure the discounted return at every time step in the continuous setting. 
-It turns out, however, that the discounted average returns are proportional to the actual un-discounted average returns \cite{sutton2018reinforcement}. The discount factor does not change the order of the policies, so it has no effect on the problem \footnote{See the box on page 254 in \cite{sutton2018reinforcement} for proof.}. 
-Accordingly, discounting is inconsequential when defining the control problem with function approximation.
 
 
 Differential returns are used in the average reward setting and defined as $G_t = \sum_{k=t+1} R_{k} - r(\pi)$. 
@@ -160,6 +150,27 @@ v_* (s) = \max_{a\in\mathcal{A}(s)} \sum_{r\in\mathcal{R}, s'\in\mathcal{S}} p(s
 \begin{equation}
 q_*(s,a)=\sum_{r\in\mathcal{R}, s'\in\mathcal{S}} \left[ r - \max_\pi{r(\pi)} + \max_{a' \in\mathcal{A}(s')} q_*(s',a') \right]
 \end{equation}
+
+
+
+Discounting is applied to tasks where immediate rewards are valued higher than future rewards. 
+It has the additional benefit of bounding the return. 
+If $\gamma < 1$, then $\sum_k \gamma^k=\dfrac{1}{1-\gamma}$, and $G_t$ is bounded, as long as $R_t$ is also bounded. 
+In the continuous setting, the discounted return $G_t$ could be measured at every time step $t$. 
+However, it turns out that the discounted average returns are proportional to the un-discounted average returns \cite{sutton2018reinforcement}. The discount factor does not change the order of the policies, so it does not affect the problem \footnote{See the box on page 254 in \cite{sutton2018reinforcement} for proof.}. 
+Accordingly, discounting is inconsequential when defining the control problem with function approximation.
+Discounted RL is incompatible with function approximation for control in continuing tasks, as it is not an optimization problem \cite{naik2019discounted}. 
+In the discounted setting there is no objective function that can describe the quality of every policy.
+Providing a partial order between policies is unfeasible for massive or continuous action and state spaces. 
+Even using a compact policy representation is unfeasible, as there is usually not one representable policy that is unambiguously better than every other representable policy. 
+A policy might have a higher value in some states but lower in others. 
+Therefore, an objective function, like the total sum of rewards in the episodic setting, is necessary to rank the quality of policies in the continuing setting.
+Average reward is an optimization problem that is well suited for continuous-time RL. 
+It turns out that the discounted average returns are proportional to the un-discounted average returns \cite{sutton2018reinforcement}, and the discount factor does not change the partial order of the policies \footnote{See the box on page 254 in \cite{sutton2018reinforcement} for proof.}. 
+Therefore, the discount factor becomes a hyperparameter of the algorithm, not a parameter specifying the optimization objective \cite{sutton2018reinforcement}. 
+Even more, the discount factor can change the optimization objective \cite{naik2019discounted}. 
+Changing the discount factor will sometimes change the policy when using algorithms like SARSA or Q-learning. Greedily maximizing discounted future value does therefore not maximize average reward. 
+
 
 
 
