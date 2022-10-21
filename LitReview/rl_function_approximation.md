@@ -102,8 +102,21 @@ Long short-term memory (LSMT) is a form of RNN that recently has been successful
 
 
 
-Online reinforcement learning is less prone to overfitting than traditional supervised learning approaches. It does not use limited sets of training data. 
-Nevertheless, overfitting is still a potential issue, and it can be mitigated by measures such as regularization and early stopping \cite{marsland2011machine}. 
+Online reinforcement learning is less prone to overfitting than traditional supervised learning approaches, as it does not use limited sets of training data. 
+Nevertheless, overfitting is still a potential risk. 
+Stochasticity does not necessarily prevent overfitting \cite{zhang2018study}. 
+As deep reinforcement learning is applied to critical domains such as healthcare, finance, and energy infrastructure, the model must generalize out-of-sample. 
+The test performance of deep RL agents that perform optimally during training has been shown to vary greatly \cite{zhang2018study}. 
+Regularization of connection weights lowers the complexity of the network and can mitigate the risk of overfitting \cite{marsland2011machine}. 
+Separate training and testing sets with statistically tied data are recommended when training deep RL agents \cite{zhang2018study}. 
+
+
+
+The architecture of neural nets carries an a priori algorithmic preference, known as inductive bias. 
+For certain problems, specific network architectures can significantly outperform more deeply layered FNNs. 
+E.g., convolutional neural networks perform well when dealing with computer vision tasks, while Long Short Term Memory performs well when dealing with sequence data. 
+A neural net inductive bias should be compatible with the bias of the problem it is solving if it is to generalize well out-of-sample. 
+
 
 
 
