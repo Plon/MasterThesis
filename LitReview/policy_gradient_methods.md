@@ -151,3 +151,19 @@ Advantage Actor-Critic (A2C) makes the critic learn the advantage function $A(S_
 Optimizing with respect to the advantage function reduces the high variance of policy networks and stabilizes the model. 
 
 Asynchronous Advantage Actor-Critic (A3C) utilizes multiple independent agent networks with their own unique weight vectors that interact with a different copy of the same environment in parallel. 
+
+
+
+
+
+## Deterministic Policy Gradient. 
+Policy gradient methods traditionally sample actions stochastically. 
+Deterministic Policy Gradient (DPG) implements policy gradient methods using a deterministic policy. 
+It was introduced by researchers from DeepMind in 2014 \cite{silver2014deterministic}. 
+The deterministic policy gradient theorem is a special case of the policy gradient theorem where the variance (i.e., exploration) approaches zero \footnote{For full proof see \cite{silver2014deterministic}}. 
+One of the advantages of DPG is that the deterministic policy gradient can be estimated more efficiently than the stochastic policy gradient. 
+In the stochastic case the gradient integrates over the whole state and action space, while in the deterministic case the gradient only integrates over the state space. 
+In general, deterministic policies do not ensure sufficient exploration, which can lead to premature convergence. 
+DPG solves this problem by introducing an off-policy actor-critic algorithm that learns a deterministic target policy from an exploratory behaviour policy. 
+DPG can outperform stochastic policy gradient methods, especially in high-dimensional action spaces. 
+

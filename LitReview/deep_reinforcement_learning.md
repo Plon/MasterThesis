@@ -14,7 +14,7 @@ The combination of nonlinear function approximation and bootstrapping may lead t
 ## Deep Q Network. 
 Deep Q Network (DQN) is a model-free value-based RL algorithm that extends the tabular Q-learning algorithm to the continuous state space. 
 It was introduced by researchers from DeepMind in 2013 \cite{mnih2013playing}. 
-DQN approximates the Q-values using artificial neural networks instead of a lookup table like Q-learning. 
+DQN approximates the Q-values using a convolutional neural network instead of a lookup table like Q-learning. 
 The network takes the state as input and outputs the Q-values of all actions from that state. 
 For this reason, DQN only works for low-dimensional, discrete action spaces. 
 As for Q-learning, the Q-values are initialized to random estimates and then improved as the environment is explored. The algorithm is off-policy as it learns the greedy policy while following a non-greedy policy, e.g., $\epsilon$-greedy. 
@@ -42,9 +42,26 @@ The target Q-network copies the learned weights of the Q-network after some pred
 
 
 
+
+## Deep Recurrent Q-Network. 
+DQN uses the last four frames as input to its convolutional neural network. 
+The problem becomes non-Markovian if the future states depend on more than the DQN's current input. 
+Thus, it becomes a Partially-Observable Markov Decision Process (POMDP). 
+Deep Recurrent Q-Network (DQRN) adds recurrency to deep Q-networks by replacing the first post-convolutional fully-connected layer with a recurrent LSTM. 
+It was introduced in 2015 \cite{hausknecht2015deep}. 
+Instead of stacking a history of frames as DQN does, the DQRN uses reccurency to be able to match DQN's performance while only seeing one frame at a time. 
+DRQN handles partial observability. It can generalize its policies to complete observations when trained with partial observations, and vice-versa. 
+Although recurrency is a viable alternative to stacking observations, it is not assumed to improve performance. 
+
+
+
+
+
+
+
 ## Deep Deterministic Policy Gradients. 
 Deep Deterministic Policy Gradients (DDPG) is an extension of the DQN algorithm that combines Q-learning with actor-critic to create a model-free algorithm with continuous action space where the critic learns a Q-function and the actor learns a deterministic parameterized policy based on the Q-values from the critic. 
-It was introduced by researchers from DeepMind in 2016 \cite{lillicrap2015continuous}. 
+It was introduced by researchers from DeepMind in 2015 \cite{lillicrap2015continuous}. 
 
 
 In DDPG, the critic is represented by the Q-network and target Q-network, just as in DQN. The Q-network is updated in the same way as for DQN. 

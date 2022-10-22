@@ -95,7 +95,12 @@ There are no cycles where the output of a node can affect its subsequent input.
 > Figure showing multi-layer perceptron network. 
 
 
-Recurrent neural networks (RNNs) define a class of neural nets that allows connection between nodes to create cycles so that outputs from one node affect inputs to another. 
+Convolutional Neural Networks (CNNs) define a class of neural nets that are specialized to process data with a known, grid-like topology such as time-series data or images \cite{goodfellow2016deep}. A CNN is a neural net that applies convolution instead of general matrix multiplication in at least one layer. 
+A convolution is a form of integral transform defined as the integral of the product of two functions after one is reflected about the y-axis and shifted \cite{goodfellow2016deep}. 
+Several successful deep RL applications use CNNs \cite{sutton2018reinforcement}.
+
+
+Recurrent Neural Networks (RNNs) define a class of neural nets that allows connection between nodes to create cycles so that outputs from one node affect inputs to another. 
 This enables the networks to exhibit temporal dynamic behavior. 
 They are well suited for analyzing sequential data. 
 Long short-term memory (LSMT) is a form of RNN that recently has been successfully applied to financial time series forecasting \cite{siami2018forecasting}. 
