@@ -162,8 +162,53 @@ Deterministic Policy Gradient (DPG) implements policy gradient methods using a d
 It was introduced by researchers from DeepMind in 2014 \cite{silver2014deterministic}. 
 The deterministic policy gradient theorem is a special case of the policy gradient theorem where the variance (i.e., exploration) approaches zero \footnote{For full proof see \cite{silver2014deterministic}}. 
 One of the advantages of DPG is that the deterministic policy gradient can be estimated more efficiently than the stochastic policy gradient. 
-In the stochastic case the gradient integrates over the whole state and action space, while in the deterministic case the gradient only integrates over the state space. 
+In the stochastic case, the gradient integrates over the whole state and action space, while in the deterministic case the gradient only integrates over the state space. 
 In general, deterministic policies do not ensure sufficient exploration, which can lead to premature convergence. 
-DPG solves this problem by introducing an off-policy actor-critic algorithm that learns a deterministic target policy from an exploratory behaviour policy. 
+DPG solves this problem by introducing an off-policy actor-critic algorithm that learns a deterministic target policy from an exploratory behavior policy. 
 DPG can outperform stochastic policy gradient methods, especially in high-dimensional action spaces. 
 
+
+
+
+## Trust Region Policy Optimization. 
+Policy gradient methods use gradient descent when updating the policy parameter.
+The policy parameter weights are moved in the direction suggested by the first-order derivative, i.e., the surface of the gradient is assumed to be flat. 
+However, if the surface is curved, a too-big step might hurt the performance of the policy. 
+This problem can be mitigated using small step sizes, but too small step sizes lead to slow learning and poor sample efficiency. 
+Trust Region Policy Optimization (TRPO) \cite{schulman2015trust} is an algorithm for policy optimization with guaranteed monotonic improvement. 
+The theoretical TRPO update is defined as 
+\begin{equation}
+\theta_{k+1} = \argmax_\theta \mathcal{L}(\theta_k, \theta)
+\end{equation}
+such that $\bar{D}_{KL} \leq \delta$. The surrogate advantage $\mathcal{L}(\theta_k, \theta)$ measures the performance of the new policy using data from the old policy, and defines the objective function of TRPO
+\begin{equation}
+J^{TRPO}(\theta) = \mathcal{L}(\theta_k, \theta) = \mathbb{E} \left[ \dfrac{\pi_\theta (a|s)}{\pi_{\theta_k}(a|s)} A^{\pi_{\theta_k} (s,a)} \right]
+\end{equation}
+TRPO restricts the old and new policies to be within some distance $\delta$, measured by KL-divergence
+\begin{equation}
+\bar{D}_{KL} (\theta | \theta_k) = \mathbb{E}[D_{KL}(\pi_{\theta}(\cdot | s) || \pi_{\theta_k}(\cdot | s))]\leq \delta
+\end{equation}
+The theoretical TPRO update can be challenging to work with, so there have been developed more practical implementations that are easier to work with \cite{schulman2015trust}. 
+TRPO is not compatible with architectures that includes a lot of noise or parameter sharing. 
+
+
+
+
+
+
+## Proximal Policy Optimization. 
+Proximal Policy Optimization (PPO) is a first-order optimization and an improvement on TRPO that is more general and simpler to implement. 
+It was introduced by researchers from OpenAI in 2017 \cite{schulman2017proximal}
+PPO defines a probability ratio between the old and new policy defined as 
+\begin{equation}
+r(\theta) = \dfrac{\pi_\theta (a|s)}{\pi_{\theta_k} (a|s)}
+\end{equation}
+Thus, the objective function from TRPO can be expressed as 
+\begin{equation}
+J^{TRPO}(\theta) = \mathbb{E} \left[ r(\theta) A^{\pi_{\theta_k} (s,a)} \right]
+\end{equation}
+Instead of adding the KL-divergence constraint from TRPO, PPO restricts the probability ratio $r(\theta)$ to stay withing a small neighborhood around 1 with radius $\epsilon$, which is a hyperparameter (e.g., $\epsilon=0.2$). Thus, the objective function for PPO is 
+\begin{equation}
+J^{CLIP}(\theta) = \mathcal{L}(\theta_k, \theta) = \mathbb{E} \left[ \min{(r(\theta) A^{\pi_{\theta_k} (s,a)}, clip(r(\theta), 1-\epsilon, 1+\epsilon)A^{\pi_{\theta_k} }) \right]
+\end{equation}
+where the $clip$ function limits the probability ratio between $[1-\epsilon, 1+\epsilon]$. PPO's objective function $J^{CLIP}$ takes the minimum value between the original value and the clipped value. I.e., the objective is a lower bound. 
