@@ -150,8 +150,6 @@ Initialize $S\in\mathcal{S}$ (e.g., to $s_0$)
 Advantage Actor-Critic (A2C) makes the critic learn the advantage function $A(S_t,A_t)=q(S_t,A_t)-v(S_t)=R_t + \gamma v(s') - v(s)$ instead of the value function. The advantage function expresses how much better an action is compared to the average value of that state. The TD error is a good estimator of the advantage function. 
 Optimizing with respect to the advantage function reduces the high variance of policy networks and stabilizes the model. 
 
-Asynchronous Advantage Actor-Critic (A3C) utilizes multiple independent agent networks with their own unique weight vectors that interact with a different copy of the same environment in parallel. 
-
 
 
 
