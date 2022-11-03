@@ -1,70 +1,13 @@
 import numpy as np
 import torch
 torch.manual_seed(0)
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.distributions import Categorical, Normal
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-
-class ActorNetworkContinuous(nn.Module):
-    def __init__(self, observation_space=8, hidden_size=128, action_space=1, action_bounds=1) -> None:
-        super(ActorNetworkContinuous, self).__init__()
-        self.action_bounds = action_bounds
-        self.input_layer = nn.Linear(observation_space, hidden_size)
-        self.output_layer = nn.Linear(hidden_size, action_space)
-
-        logstds_param = nn.Parameter(torch.full((action_space,), 0.1))
-        self.register_parameter("logstds", logstds_param)
-
-    def forward(self, x) -> torch.Tensor:
-        x = F.relu(self.input_layer(x))
-        return self.output_layer(x)
-    
-    def act(self, state) -> tuple[float, torch.Tensor]:
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        mean = self.forward(state).cpu()
-        std = torch.clamp(self.logstds.exp(), 1e-3, 50)
-        dist = Normal(mean, std) 
-        action = dist.sample() 
-        return torch.clamp(action, -self.action_bounds, self.action_bounds).item(), dist.log_prob(action)
-
-
-class ActorNetworkDiscrete(nn.Module):
-    def __init__(self, observation_space=8, hidden_size=128, action_space=3):
-        super(ActorNetworkDiscrete, self).__init__()
-        self.input_layer = nn.Linear(observation_space, hidden_size)
-        self.output_layer = nn.Linear(hidden_size, action_space)
-
-    def forward(self, x):
-        x = F.relu(self.input_layer(x))
-        x = self.output_layer(x)
-        return F.softmax(x, dim=1)
-    
-    def act(self, state):
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        probs = self.forward(state).cpu()        
-        m = Categorical(probs) 
-        action = m.sample() 
-        return (action.item() - 1), m.log_prob(action)
-
-
-class CriticNetwork(nn.Module):
-    def __init__(self, observation_space=8, hidden_size=128) -> None:
-        super(CriticNetwork, self).__init__()
-        self.input_layer = nn.Linear(observation_space, hidden_size)
-        self.output_layer = nn.Linear(hidden_size, 1)
-
-    def forward(self, x):
-        x = self.input_layer(x)
-        x = F.relu(x)
-        return self.output_layer(x)
 
 
 #TODO find better hyperparameters
 # Actor-Critic with eligibility traces, continuing (undiscounted) setting
-def actor_critic(actor_net, critic_net, env, lambda_actor=0.1, lambda_critic=0.1, alpha_actor=1e-2, alpha_critic=1e-2, alpha_R_hat=1e-2,  num_episodes=np.iinfo(np.int32).max): 
-    scores = []
+def actor_critic(actor_net, critic_net, env, lambda_actor=1e-1, lambda_critic=1e-1, alpha_actor=1e-2, alpha_critic=1e-1, alpha_R_hat=1e-1,  num_episodes=np.iinfo(np.int32).max) -> tuple[np.ndarray, np.ndarray]: 
+    rewards = []
     actions = []
     R_hat = 0
     state = env.state()
@@ -79,7 +22,7 @@ def actor_critic(actor_net, critic_net, env, lambda_actor=0.1, lambda_critic=0.1
             break
 
         actions.append(action)
-        scores.append(reward)
+        rewards.append(reward)
 
         #Calculate eligibility trace of actor net
         actor_net.zero_grad()
@@ -131,4 +74,4 @@ def actor_critic(actor_net, critic_net, env, lambda_actor=0.1, lambda_critic=0.1
 
         state = new_state
 
-    return np.array(scores), np.array(actions)
+    return np.array(rewards), np.array(actions)
