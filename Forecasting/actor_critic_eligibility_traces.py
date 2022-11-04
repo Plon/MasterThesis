@@ -4,9 +4,9 @@ torch.manual_seed(0)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-#TODO find better hyperparameters
+#TODO very sensitive to hyperparameters - find better hyperparameters
 # Actor-Critic with eligibility traces, continuing (undiscounted) setting
-def actor_critic(actor_net, critic_net, env, lambda_actor=1e-1, lambda_critic=1e-1, alpha_actor=1e-2, alpha_critic=1e-1, alpha_R_hat=1e-1,  num_episodes=np.iinfo(np.int32).max) -> tuple[np.ndarray, np.ndarray]: 
+def actor_critic(actor_net, critic_net, env, lambda_actor=1e-1, lambda_critic=1e-1, alpha_actor=1e-1, alpha_critic=1e-3, alpha_R_hat=1e-1,  num_episodes=np.iinfo(np.int32).max) -> tuple[np.ndarray, np.ndarray]: 
     rewards = []
     actions = []
     R_hat = 0
