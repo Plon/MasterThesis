@@ -1,7 +1,7 @@
 import random
 from copy import deepcopy
 import numpy as np
-from batch_learning import ReplayMemory, Transition
+from batch_learning import ReplayMemory, Transition, get_batch
 import torch
 torch.manual_seed(0)
 import torch.optim as optim
@@ -12,18 +12,13 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from deep_deterministic_policy_gradient import soft_updates
 
 
-#TODO fix intelligent exploring
 def act(model, state, epsilon=0) -> int:
     if random.random() < epsilon:
         return np.random.choice(2) - 1
     else:
-        #return model(torch.from_numpy(state).float().unsqueeze(0).to(device)).cpu().argmax().item() - 1
         state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        model.eval()
-        with torch.no_grad():
-            action_vals = model(state).cpu()
-        model.train()
-        print(action_vals, action_vals.argmax().item())
+        action_vals = model(state).cpu().detach()
+        #print(action_vals, action_vals.argmax().item()) #<- see that the q-values converge against one action
         return action_vals.argmax().item() - 1
 
 
@@ -68,46 +63,41 @@ class DRQN(nn.Module):
         return x
 
 
-#TODO seems to favour one action after a while
-def batch_learning(replay_buffer: ReplayMemory, batch_size: int, q_net: torch.nn.Module, target_net: torch.nn.Module, optimizer: torch.optim) -> None: 
-    """
-    Performs batch learning on the q_net
-
-    Args: 
-        replay_buffer (ReplayMemory): memory that (S, A, R, S') experience is drawn from
-        batch_size (int): number of batches to train the network on
-        q_net (nn.Module): the network to be trained
-        target_net (nn.Module): the target network to q_net
-        optimizer (nn.Optim): the optimizer for q_net
-    """
-    if len(replay_buffer) < batch_size:
-        return
-    if batch_size < 2:
-        raise ValueError("Argument batch_size must be integer >= 2")
-    
-    batch = replay_buffer.sample(batch_size)
-    batch = Transition(*zip(*batch))
-
-    state_batch = torch.cat(batch.state)
-    action_batch = torch.cat(batch.action) 
-    reward_batch = torch.cat(batch.reward)
-    next_state_batch = torch.cat(batch.next_state)
+def compute_loss_dqn(batch: tuple[torch.Tensor], net: torch.nn.Module, target_net: torch.nn.Module) -> torch.Tensor: 
+    state_batch, action_batch, reward_batch, next_state_batch = batch
     with torch.no_grad():
         target_state_vals = target_net(next_state_batch).max(1).values.detach()    
-    state_action_vals = q_net(state_batch)[range(action_batch.size(0)), (action_batch.long()+1)] 
-    loss = torch.nn.SmoothL1Loss()(state_action_vals, (reward_batch + target_state_vals))
+    state_action_vals = net(state_batch)[range(action_batch.size(0)), (action_batch.long()+1)] 
+    return torch.nn.SmoothL1Loss()(state_action_vals, (reward_batch + target_state_vals))
     """
     loss = 0
     for s, a, r, s_ in zip(batch.state, batch.action, batch.reward, batch.next_state):
-        loss += torch.nn.SmoothL1Loss().to(device)(q_net(s)[0, (a.long()+1)], (r + target_net(s_).max(1).values.squeeze())) / batch_size
+        loss += torch.nn.SmoothL1Loss().to(device)(net(s)[0, (a.long()+1)], (r + target_net(s_).max(1).values.squeeze())) / batch_size
+    return loss
     #"""
+
+
+def compute_loss_double_dqn(batch: tuple[torch.Tensor], net: torch.nn.Module, target_net: torch.nn.Module) -> torch.Tensor: 
+    state_batch, action_batch, reward_batch, next_state_batch = batch
+    with torch.no_grad():
+        target_actions = net(next_state_batch).argmax(dim=1)
+        target_state_vals = target_net(next_state_batch)[range(next_state_batch.size(0)), target_actions]
+    state_action_vals = net(state_batch)[range(action_batch.size(0)), (action_batch.long()+1)] 
+    return torch.nn.SmoothL1Loss()(state_action_vals, (reward_batch + target_state_vals))
+
+
+def update(replay_buffer: ReplayMemory, batch_size: int, net: torch.nn.Module, target_net: torch.nn.Module, optimizer: torch.optim, loss_fn=compute_loss_dqn) -> None:
+    batch = get_batch(replay_buffer, batch_size)
+    if batch is None:
+        return
     optimizer.zero_grad()
+    loss = loss_fn(batch, net, target_net)
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(q_net.parameters(), 1) #Exploding gradient 
+    torch.nn.utils.clip_grad_norm_(net.parameters(), 1) #Exploding gradient 
     optimizer.step()
 
 
-def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_rate=1e-1, batch_size=10, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0.005, num_episodes=np.iinfo(np.int32).max) -> tuple[np.ndarray, np.ndarray]: 
+def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_rate=1e-1, batch_size=10, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0.005, num_episodes=np.iinfo(np.int32).max, double_dqn = False) -> tuple[np.ndarray, np.ndarray]: 
     """
     Training for DQN or DRQN
 
@@ -132,21 +122,28 @@ def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_ra
     actions = []
     replay_buffer = ReplayMemory(1000) # what capacity makes sense?
     state = env.state() 
-
+    if double_dqn:
+        loss_fn = compute_loss_double_dqn
+    else: 
+        loss_fn = compute_loss_dqn
+    
     for i in range(num_episodes):
         action = act(q_net, state, exploration_rate) 
         next_state, reward, done, _ = env.step(action) 
 
         if done:
-            batch_learning(replay_buffer, max(2, (i % batch_size)), q_net, target_net, optimizer)
+            update(replay_buffer, batch_size, q_net, target_net, optimizer, loss_fn)
             break
 
         actions.append(action)
         rewards.append(reward)
-        replay_buffer.push(torch.from_numpy(state).float().unsqueeze(0).to(device), torch.FloatTensor([action]), torch.FloatTensor([reward]), torch.from_numpy(next_state).float().unsqueeze(0).to(device))
+        replay_buffer.push(torch.from_numpy(state).float().unsqueeze(0).to(device), 
+                           torch.FloatTensor([action]), 
+                           torch.FloatTensor([reward]), 
+                           torch.from_numpy(next_state).float().unsqueeze(0).to(device))
 
         if i % batch_size == 0:
-            batch_learning(replay_buffer, batch_size, q_net, target_net, optimizer)
+            update(replay_buffer, batch_size, q_net, target_net, optimizer, loss_fn)
             soft_updates(q_net, target_net, target_learning_rate)
         
         state = next_state
