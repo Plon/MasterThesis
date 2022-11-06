@@ -132,7 +132,7 @@ def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_ra
         next_state, reward, done, _ = env.step(action) 
 
         if done:
-            update(replay_buffer, batch_size, q_net, target_net, optimizer, loss_fn)
+            update(replay_buffer, (i%batch_size), q_net, target_net, optimizer, loss_fn)
             break
 
         actions.append(action)

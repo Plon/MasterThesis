@@ -8,10 +8,9 @@ import torch.nn.functional as F
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from batch_learning import ReplayMemory, Transition, get_batch
 from networks import fanin_init
-training = True
 
 
-def act(net, state, epsilon=0) -> torch.Tensor:
+def act(net, state, epsilon=0, training=True) -> torch.Tensor:
     state = torch.from_numpy(state).float().unsqueeze(0).to(device)
     action = net(state).cpu().detach()
     noise = ((np.random.rand(1)[0] * 2) - 1) #TODO maybe change to Ornstein-Uhlenbeck process
@@ -25,7 +24,22 @@ class DDPG_Actor(nn.Module):
         super(DDPG_Actor, self).__init__()
         self.fc1 = nn.Linear(observation_space, hidden_size)
         self.fc2 = nn.Linear(hidden_size, action_space)
+        """
+        self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
+        self.fc2.weight.data.uniform_(-EPS,EPS)
         #"""
+
+    def forward(self, x) -> torch.Tensor:
+        x = F.relu(self.fc1(x))
+        return torch.tanh(self.fc2(x))
+
+
+class DDPG_Actor_Discrete(nn.Module):
+    def __init__(self, observation_space=8, hidden_size=128, action_space=3, EPS=0.003) -> None:
+        super(DDPG_Actor_Discrete, self).__init__()
+        self.fc1 = nn.Linear(observation_space, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, action_space)
+        """
         self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
         self.fc2.weight.data.uniform_(-EPS,EPS)
         #"""
@@ -42,7 +56,7 @@ class DDPG_Critic(nn.Module):
         self.fca1 = nn.Linear(action_space,hidden_size)
         self.fc2 = nn.Linear(hidden_size*2,hidden_size)
         self.fc3 = nn.Linear(hidden_size,1)
-        #"""
+        """
         self.fcs1.weight.data = fanin_init(self.fcs1.weight.data.size())
         self.fca1.weight.data = fanin_init(self.fca1.weight.data.size())
         self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
@@ -153,7 +167,7 @@ def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e
         next_state, reward, done, _ = env.step(action) 
 
         if done:
-            update(replay_buffer, batch_size, critic_net, critic_target_net, actor_net, actor_target_net, optimizer_critic, optimizer_actor)
+            update(replay_buffer, (i%batch_size), critic_net, critic_target_net, actor_net, actor_target_net, optimizer_critic, optimizer_actor)
             break
 
         actions.append(action)
