@@ -13,54 +13,72 @@ from deep_deterministic_policy_gradient import soft_updates
 criterion = torch.nn.MSELoss()
 
 
-class DQN(nn.Module):
-    def __init__(self, observation_space=8, hidden_size=128, action_space=3, window_size=1) -> None:
-        super(DQN, self).__init__() 
-        self.conv_layer = nn.Conv1d(observation_space, hidden_size, kernel_size=window_size)
-        self.output_layer = nn.Linear(hidden_size, action_space)
+class DRQN(nn.Module):
+    def __init__(self, observation_space=8, hidden_size=128, action_space=3, window_size=1, num_lstm_layers=1) -> None:
+        super(DRQN, self).__init__()
+        self.input_layer = nn.Conv1d(observation_space, hidden_size, kernel_size=window_size)
+        self.lstm_layer = nn.LSTM(input_size=hidden_size, hidden_size=action_space, num_layers=num_lstm_layers, batch_first=True)
 
-    def forward(self,x):
-        x = x.unsqueeze(-1)
-        x = self.conv_layer(x)
+    def forward(self, x, hx=None) -> tuple[torch.Tensor, torch.Tensor]:
+        #Conv layer
+        x = x.unsqueeze(-1) 
+        x = self.input_layer(x)
         x = F.relu(x)
         x = x.squeeze().unsqueeze(0)
-        x = self.output_layer(x)
         if len(x.shape) == 3: #Batch 
             x = x.squeeze()
-        return x
+
+        #LSTM layer
+        if hx is not None:
+            x, hx = self.lstm_layer(x, hx)
+        else: 
+            x, hx = self.lstm_layer(x)
+        return x, hx
 
 
-def act(model, state, epsilon=0) -> int:
+class DLSTMQN(nn.Module):
+    def __init__(self, observation_space=8, hidden_size=128, action_space=3, num_lstm_layers=1) -> None:
+        super(DLSTMQN, self).__init__()
+        self.input_layer = nn.Linear(observation_space, hidden_size)
+        self.lstm_layer = nn.LSTM(input_size=hidden_size, hidden_size=action_space, num_layers=num_lstm_layers, batch_first=True)
+
+    def forward(self, x, hx=None) -> tuple[torch.Tensor, torch.Tensor]:
+        x = self.input_layer(x)
+        x = F.relu(x)        
+        if hx is not None:
+            x, hx = self.lstm_layer(x, hx)
+        else: 
+            x, hx = self.lstm_layer(x)
+        return x, hx
+
+
+def act(model, state, hx, epsilon=0) -> tuple[int, torch.Tensor]:
     state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-    action_vals = model(state).cpu().detach()
+    action_vals, hx = model(state, hx)
     if random.random() < epsilon:
         action = np.random.choice(2) - 1
     else:
         action = action_vals.argmax().item() - 1
-    return action
+    return action, hx
 
 
 def compute_loss_dqn(batch: tuple[torch.Tensor], net: torch.nn.Module, target_net: torch.nn.Module) -> torch.Tensor: 
     state_batch, action_batch, reward_batch, next_state_batch = batch
     with torch.no_grad():
-        target_state_vals = target_net(next_state_batch).max(1).values
-    state_action_vals = net(state_batch)[range(action_batch.size(0)), (action_batch.long()+1)] 
-    return criterion(state_action_vals, (reward_batch + target_state_vals))
-    """
-    loss = 0
-    for s, a, r, s_ in zip(batch.state, batch.action, batch.reward, batch.next_state):
-        loss += torch.nn.SmoothL1Loss().to(device)(net(s)[0, (a.long()+1)], (r + target_net(s_).max(1).values.squeeze())) / batch_size
-    return loss
-    #"""
+        max_q_next = target_net(next_state_batch)[0].max(1).values
+    q_est = max_q_next + reward_batch
+    q = net(state_batch)[0][range(action_batch.size(0)), (action_batch.long()+1)]
+    return criterion(q, q_est)
 
 
 def compute_loss_double_dqn(batch: tuple[torch.Tensor], net: torch.nn.Module, target_net: torch.nn.Module) -> torch.Tensor: 
     state_batch, action_batch, reward_batch, next_state_batch = batch
     with torch.no_grad():
-        target_actions = net(next_state_batch).argmax(dim=1)
-        target_state_vals = target_net(next_state_batch)[range(next_state_batch.size(0)), target_actions]
-    state_action_vals = net(state_batch)[range(action_batch.size(0)), (action_batch.long()+1)] 
-    return criterion(state_action_vals, (reward_batch + target_state_vals))
+        target_actions = net(next_state_batch)[0].argmax(dim=1)
+        max_q_next = target_net(next_state_batch)[0][range(next_state_batch.size(0)), target_actions]
+    q_est = max_q_next + reward_batch
+    q = net(state_batch)[0][range(action_batch.size(0)), (action_batch.long()+1)]
+    return criterion(q, q_est)
 
 
 def update(replay_buffer: ReplayMemory, batch_size: int, net: torch.nn.Module, target_net: torch.nn.Module, optimizer: torch.optim, loss_fn=compute_loss_dqn) -> None:
@@ -75,9 +93,9 @@ def update(replay_buffer: ReplayMemory, batch_size: int, net: torch.nn.Module, t
     optimizer.step()
 
 
-def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_rate=1e-1, batch_size=10, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0.005, num_episodes=np.iinfo(np.int32).max, double_dqn = False) -> tuple[np.ndarray, np.ndarray]: 
+def deep_recurrent_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_rate=1e-1, batch_size=10, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0.005, num_episodes=np.iinfo(np.int32).max, double_dqn = False) -> tuple[np.ndarray, np.ndarray]: 
     """
-    Training for DQN
+    Training for DRQN
 
     Args: 
         q_net (): network that parameterizes the Q-learning function
@@ -100,13 +118,14 @@ def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_ra
     actions = []
     replay_buffer = ReplayMemory(1000) # what capacity makes sense?
     state = env.state() 
+    hx = None
     if double_dqn:
         loss_fn = compute_loss_double_dqn
     else: 
         loss_fn = compute_loss_dqn
-    
+        
     for i in range(num_episodes):
-        action = act(q_net, state, exploration_rate) 
+        action, hx = act(q_net, state, hx, exploration_rate) 
         next_state, reward, done, _ = env.step(action) 
 
         if done:
@@ -123,7 +142,7 @@ def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_ra
         if i % batch_size == 0:
             update(replay_buffer, batch_size, q_net, target_net, optimizer, loss_fn)
             soft_updates(q_net, target_net, target_learning_rate)
-        
+
         state = next_state
         exploration_rate = max(exploration_rate*exploration_decay, exploration_min)
 

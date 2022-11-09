@@ -17,18 +17,17 @@ It was introduced by researchers from DeepMind in 2013 \cite{mnih2013playing}.
 DQN approximates the Q-values using a convolutional neural network instead of a lookup table like Q-learning. 
 The network takes the state as input and outputs the Q-values of all actions from that state. 
 For this reason, DQN only works for low-dimensional, discrete action spaces. 
-As for Q-learning, the Q-values are initialized to random estimates and then improved as the environment is explored. The algorithm is off-policy as it learns the greedy policy while following a non-greedy policy, e.g., $\epsilon$-greedy. 
+As with Q-learning, the Q-values are initialized to random estimates and then improved as the environment is explored. The algorithm is off-policy as it learns the greedy policy while following a non-greedy policy, e.g., $\epsilon$-greedy. 
 The Q-network is a neural network, a nonlinear function approximation, with weights $\theta$ that is trained by minimizing the mean squared error of the objective function $L(\theta)$ 
 \begin{equation}
 L(\theta) = \mathbb{E} [(Q'(S,A) - Q_theta(S,A))^2]
 \end{equation}
 where $Q'(S_t,A_t) = R_{t+1} + \gamma \argmax_{A'} Q_\theta (S_{t+1}, A')$. 
-The weights $\theta$ are updated using stochastic gradient ascent. 
+The weights $\theta$ are updated using stochastic gradient descent. 
 
 
 
 The DQN is able to learn action-value functions using large, nonlinear function approximation techniques in a stable and robust manner for two reasons. 
-Firstly, it trains the network off-policy with samples from a replay buffer to minimize correlations between samples. 
 Firstly, it trains the network off-policy with samples from an experience replay buffer. 
 Experience replay stores experiences $e_t = (s_t, a_t, r_t, s_{t+1})$ into a replay memory that the agent draws from at random when updating Q-values \cite{schaul2015prioritized}. 
 This technique minimizes correlations between samples. 
