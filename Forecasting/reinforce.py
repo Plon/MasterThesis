@@ -12,7 +12,7 @@ def train_policy_network(delta, log_prob, optimizer) -> None:
     optimizer.step()
 
 
-def reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=np.iinfo(np.int32).max) -> tuple[np.ndarray, np.ndarray]: 
+def reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=np.iinfo(np.int32).max, train=True) -> tuple[np.ndarray, np.ndarray]: 
     """
     Online Monte Carlo policy gradient 
     Every trajectory consists of one step, and then the loss is computed
@@ -41,6 +41,8 @@ def reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=n
 
         actions.append(action)
         rewards.append(reward) 
-        train_policy_network(reward, log_prob, optimizer)
+
+        if train:
+            train_policy_network(reward, log_prob, optimizer)
 
     return np.array(rewards), np.array(actions)

@@ -11,6 +11,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from deep_deterministic_policy_gradient import soft_updates
 #criterion = torch.nn.SmoothL1Loss()
 criterion = torch.nn.MSELoss()
+nn_activation_function = nn.LeakyReLU()
 
 
 class DQN(nn.Module):
@@ -22,7 +23,7 @@ class DQN(nn.Module):
     def forward(self,x):
         x = x.unsqueeze(-1)
         x = self.conv_layer(x)
-        x = F.relu(x)
+        x = nn_activation_function(x)
         x = x.squeeze().unsqueeze(0)
         x = self.output_layer(x)
         if len(x.shape) == 3: #Batch 
@@ -75,7 +76,7 @@ def update(replay_buffer: ReplayMemory, batch_size: int, net: torch.nn.Module, t
     optimizer.step()
 
 
-def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_rate=1e-1, batch_size=10, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0.005, num_episodes=np.iinfo(np.int32).max, double_dqn = False) -> tuple[np.ndarray, np.ndarray]: 
+def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_rate=1e-1, batch_size=10, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0, num_episodes=np.iinfo(np.int32).max, double_dqn = False, train=True) -> tuple[np.ndarray, np.ndarray]: 
     """
     Training for DQN
 
@@ -104,13 +105,16 @@ def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_ra
         loss_fn = compute_loss_double_dqn
     else: 
         loss_fn = compute_loss_dqn
+    if not train:
+        exploration_rate = exploration_min
     
     for i in range(num_episodes):
         action = act(q_net, state, exploration_rate) 
         next_state, reward, done, _ = env.step(action) 
 
         if done:
-            update(replay_buffer, max(2, (i%batch_size)), q_net, target_net, optimizer, loss_fn)
+            if train:
+                update(replay_buffer, max(2, (i%batch_size)), q_net, target_net, optimizer, loss_fn)
             break
 
         actions.append(action)
@@ -120,7 +124,7 @@ def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_ra
                            torch.FloatTensor([reward]), 
                            torch.from_numpy(next_state).float().unsqueeze(0).to(device))
 
-        if i % batch_size == 0:
+        if train and i % batch_size == 0:
             update(replay_buffer, batch_size, q_net, target_net, optimizer, loss_fn)
             soft_updates(q_net, target_net, target_learning_rate)
         

@@ -7,16 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from batch_learning import ReplayMemory, Transition, get_batch
-from networks import fanin_init
-
-
-def act(net, state, epsilon=0, training=True) -> torch.Tensor:
-    state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-    action = net(state).cpu().detach()
-    noise = ((np.random.rand(1)[0] * 2) - 1) #TODO maybe change to Ornstein-Uhlenbeck process
-    action += training*max(epsilon, 0)*noise
-    action = torch.clamp(action, -1, 1).item()
-    return action
+nn_activation_function = nn.LeakyReLU()
 
 
 class DDPG_Actor(nn.Module):
@@ -24,52 +15,40 @@ class DDPG_Actor(nn.Module):
         super(DDPG_Actor, self).__init__()
         self.fc1 = nn.Linear(observation_space, hidden_size)
         self.fc2 = nn.Linear(hidden_size, action_space)
-        """
-        self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
-        self.fc2.weight.data.uniform_(-EPS,EPS)
-        #"""
 
     def forward(self, x) -> torch.Tensor:
-        x = F.relu(self.fc1(x))
-        return torch.tanh(self.fc2(x))
-
-
-class DDPG_Actor_Discrete(nn.Module):
-    def __init__(self, observation_space=8, hidden_size=128, action_space=3, EPS=0.003) -> None:
-        super(DDPG_Actor_Discrete, self).__init__()
-        self.fc1 = nn.Linear(observation_space, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, action_space)
-        """
-        self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
-        self.fc2.weight.data.uniform_(-EPS,EPS)
-        #"""
-
-    def forward(self, x) -> torch.Tensor:
-        x = F.relu(self.fc1(x))
-        return torch.tanh(self.fc2(x))
+        x = self.fc1(x)
+        x = nn_activation_function(x)
+        x = self.fc2(x)        
+        x = torch.tanh(x)
+        return x
 
 
 class DDPG_Critic(nn.Module):
-    def __init__(self, observation_space=8, hidden_size=128, action_space=1, EPS=0.003) -> None:
+    def __init__(self, observation_space=8, hidden_size=64, action_space=1, EPS=0.003) -> None:
         super(DDPG_Critic, self).__init__()         
-        self.fcs1 = nn.Linear(observation_space,hidden_size)
-        self.fca1 = nn.Linear(action_space,hidden_size)
-        self.fc2 = nn.Linear(hidden_size*2,hidden_size)
-        self.fc3 = nn.Linear(hidden_size,1)
-        """
-        self.fcs1.weight.data = fanin_init(self.fcs1.weight.data.size())
-        self.fca1.weight.data = fanin_init(self.fca1.weight.data.size())
-        self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
-        self.fc3.weight.data.uniform_(-EPS,EPS)
-        #"""
+        self.fc1 = nn.Linear(observation_space,hidden_size)
+        self.fc2 = nn.Linear(hidden_size+action_space,int(hidden_size/2))
+        self.fc3 = nn.Linear(int(hidden_size/2),1)
         
     def forward(self, state, action):
-        s1 = F.relu(self.fcs1(state))
-        a1 = F.relu(self.fca1(action))
-        x = torch.cat((s1, a1), dim=1)
-        x = F.relu(self.fc2(x))
+        x = self.fc1(state)
+        x = nn_activation_function(x)
+        x = torch.cat((x, action), dim=1)
+        x = self.fc2(x)
+        x = nn_activation_function(x)
         x = self.fc3(x)
         return x
+
+
+def act(net, state, epsilon=0, training=True) -> torch.Tensor:
+    state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+    with torch.no_grad():
+        action = net(state).cpu()#.detach()
+    noise = ((np.random.rand(1)[0] * 2) - 1) #TODO maybe change to Ornstein-Uhlenbeck process
+    action += training*max(epsilon, 0)*noise
+    action = torch.clamp(action, -1, 1).item()
+    return action
 
 
 def soft_updates(net, target_net, tau):
@@ -90,7 +69,7 @@ def update(replay_buffer: ReplayMemory, batch_size: int, critic: torch.nn.Module
     
     #Compute loss and optimize critic
     c_loss = compute_critic_loss(actor_target, critic, critic_target, batch)
-    optimize(critic, c_loss, optimizer_critic)
+    optimize(c_loss, optimizer_critic)
 
     # Freeze Q-net
     for p in critic.parameters(): 
@@ -98,18 +77,17 @@ def update(replay_buffer: ReplayMemory, batch_size: int, critic: torch.nn.Module
 
     # Compute loss and optimize actor 
     a_loss = compute_actor_loss(actor, critic, batch[0])
-    optimize(actor, a_loss, optimizer_actor)
+    optimize(a_loss, optimizer_actor)
 
     # Unfreeze Q-net
     for p in critic.parameters(): 
         p.requires_grad = True
 
 
-def optimize(net, loss, optimizer) -> None:
+def optimize(loss, optimizer) -> None:
     """ Backpropagate and optimization step """
     optimizer.zero_grad()
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(net.parameters(), 1) #Exploding gradient 
     optimizer.step()
 
 
@@ -128,11 +106,11 @@ def compute_critic_loss(actor_target, critic, critic_target, batch) -> torch.Ten
         a_hat = actor_target(next_state)
         q_sa_hat = critic_target(next_state, a_hat).squeeze()
     q_sa = critic(state, action.reshape(-1, 1)).squeeze()
-    loss = torch.nn.SmoothL1Loss()(q_sa, (reward + q_sa_hat))
+    loss = torch.nn.MSELoss()(q_sa, (reward + q_sa_hat))
     return loss
 
 
-def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e-2, alpha_critic=1e-3, weight_decay=1e-5, target_learning_rate=5e-1, batch_size=30, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0.005, num_episodes=np.iinfo(np.int32).max) -> tuple[np.ndarray, np.ndarray]: 
+def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e-3, alpha_critic=1e-3, weight_decay=1e-3, target_learning_rate=1e-1, batch_size=30, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0, num_episodes=np.iinfo(np.int32).max, train=True) -> tuple[np.ndarray, np.ndarray]: 
     """
     Training for DDPG
 
@@ -161,13 +139,16 @@ def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e
     actions = []
     replay_buffer = ReplayMemory(1000)
     state = env.state() 
-
+    if not train:
+        exploration_rate = exploration_min
+    
     for i in range(num_episodes):
-        action = act(actor_target_net, state, exploration_rate) 
+        action = act(actor_net, state, exploration_rate) 
         next_state, reward, done, _ = env.step(action) 
 
         if done:
-            update(replay_buffer, (i%batch_size), critic_net, critic_target_net, actor_net, actor_target_net, optimizer_critic, optimizer_actor)
+            if train:
+                update(replay_buffer, max(2, (i%batch_size)), critic_net, critic_target_net, actor_net, actor_target_net, optimizer_critic, optimizer_actor)
             break
 
         actions.append(action)
@@ -177,7 +158,7 @@ def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e
                            torch.FloatTensor([reward]), 
                            torch.from_numpy(next_state).float().unsqueeze(0).to(device))
 
-        if len(replay_buffer) > batch_size:
+        if train and len(replay_buffer) >= batch_size and i % batch_size == 0: 
             update(replay_buffer, batch_size, critic_net, critic_target_net, actor_net, actor_target_net, optimizer_critic, optimizer_actor)
             soft_updates(critic_net, critic_target_net, target_learning_rate)
             soft_updates(actor_net, actor_target_net, target_learning_rate)
