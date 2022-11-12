@@ -4,9 +4,7 @@ torch.manual_seed(0)
 import torch.optim as optim
 
 
-def train_policy_network(delta, log_prob, optimizer) -> None: 
-    """ Calculate loss for policy and backpropagate """
-    loss = -log_prob * delta
+def optimize(optimizer, loss) -> None: 
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
@@ -43,6 +41,7 @@ def reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=n
         rewards.append(reward) 
 
         if train:
-            train_policy_network(reward, log_prob, optimizer)
+            loss = - log_prob * reward
+            optimize(optimizer, loss)
 
     return np.array(rewards), np.array(actions)
