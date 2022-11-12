@@ -32,14 +32,15 @@ class ActorNetwork1DConvolutionalLSTMDiscrete(nn.Module):
         #Conv layer
         x = x.unsqueeze(-1).to(device)
         x = self.input_layer(x)
-        x = F.relu(x)
+        x = nn.LeakyReLU()(x)
         x = x.squeeze().unsqueeze(0)
 
         #LSTM layer
         h_0 = Variable(torch.zeros(self.num_lstm_layers, self.lstm_hidden_size)) #hidden state
         c_0 = Variable(torch.zeros(self.num_lstm_layers, self.lstm_hidden_size)) #internal state
         x, (hx, cx) = self.lstm_layer(x, (h_0, c_0))
-        x = self.output_layer(F.relu(x))
+        #x = nn.LeakyReLU()(x)
+        x = self.output_layer(x)
         return F.softmax(x, dim=1)
 
     def act(self, state) -> tuple[float, torch.Tensor]:
@@ -66,14 +67,14 @@ class ActorNetwork1DConvolutionalLSTMContinuous(nn.Module):
         #Conv layer
         x = x.unsqueeze(-1).to(device)
         x = self.input_layer(x)
-        x = F.relu(x)
+        x = nn.LeakyReLU()(x)
         x = x.squeeze().unsqueeze(0)
 
         #LSTM layer
         h_0 = Variable(torch.zeros(self.num_lstm_layers, self.lstm_hidden_size)) #hidden state
         c_0 = Variable(torch.zeros(self.num_lstm_layers, self.lstm_hidden_size)) #internal state
         x, (hx, cx) = self.lstm_layer(x, (h_0, c_0))
-        x = F.relu(x)
+        #x = nn.LeakyReLU()(x)
                 
         #Output layer
         return torch.tanh(self.mean_layer(x)), F.softplus(self.std_layer(x))
@@ -99,7 +100,7 @@ class ActorNetwork1DConvolutionalDiscrete(nn.Module):
     def forward(self, x) -> torch.Tensor:
         x = x.unsqueeze(-1).to(device)
         x = self.input_layer(x)
-        x = F.relu(x)
+        x = nn.LeakyReLU()(x)
         x = x.squeeze().unsqueeze(0)
         x = self.output_layer(x)
         return F.softmax(x, dim=1)
@@ -124,7 +125,7 @@ class ActorNetwork1DConvolutionalContinuous(nn.Module):
     def forward(self, x) -> torch.Tensor:
         x = x.unsqueeze(-1).to(device)
         x = self.input_layer(x)
-        x = F.relu(x)
+        x = nn.LeakyReLU()(x)
         x = x.squeeze().unsqueeze(0)
         return torch.tanh(self.mean_layer(x)), F.softplus(self.std_layer(x))
 
@@ -143,19 +144,12 @@ class ActorNetwork1DConvolutionalContinuous(nn.Module):
 class ActorNetworkLSTMDiscrete(nn.Module):
     def __init__(self, observation_space=8, hidden_size=128, action_space=3, n_layers=1) -> None:
         super(ActorNetworkLSTMDiscrete, self).__init__()
-        self.input_layer = nn.Linear(observation_space, hidden_size)
-        #self.lstm_layer = nn.LSTM(input_size=hidden_size, hidden_size=action_space, num_layers=n_layers, batch_first=True)
-        self.lstm_layer = nn.LSTM(input_size=hidden_size, hidden_size=hidden_size, num_layers=n_layers, batch_first=True)
+        self.lstm_layer = nn.LSTM(input_size=observation_space, hidden_size=hidden_size, num_layers=n_layers, batch_first=True)
         self.output_layer = nn.Linear(hidden_size, action_space)
 
     def forward(self, x) -> torch.Tensor:
-        x = self.input_layer(x)
-        x = F.relu(x)   
         x, (hx, cx) = self.lstm_layer(x)
-        #print(x.shape)
-        x = F.relu(hx)
         x = self.output_layer(x)
-        #print(x.shape)
         return F.softmax(x, dim=1)
 
     def act(self, state) -> tuple[int, torch.Tensor]:
@@ -168,23 +162,17 @@ class ActorNetworkLSTMDiscrete(nn.Module):
 
 ### ---------------- Continuous Action Space
 class ActorNetworkLSTMContinuous(nn.Module):
-    def __init__(self, observation_space=8, hidden_size=128, action_space=1, n_layers=1, action_bounds=1) -> None:
+    def __init__(self, observation_space=8, hidden_size=128, n_layers=1) -> None:
         super(ActorNetworkLSTMContinuous, self).__init__()
-        self.action_bounds = action_bounds
-        self.num_layers = n_layers
-        self.hidden_size = hidden_size
         self.lstm_layer = nn.LSTM(input_size=observation_space, hidden_size=hidden_size, num_layers=n_layers, batch_first=True)
         self.mean_layer = nn.Linear(hidden_size, 1)        
         self.std_layer = nn.Linear(hidden_size, 1)
 
-    def forward(self, x) -> torch.Tensor:
-        #h_0 = Variable(torch.zeros(self.num_layers, self.hidden_size)) #hidden state
-        #c_0 = Variable(torch.zeros(self.num_layers, self.hidden_size)) #internal state
-        #x, (hx, cx) = self.lstm_layer(x, (h_0, c_0))
+    def forward(self, x) -> tuple[torch.Tensor, torch.Tensor]:
         x, (hx, cx) = self.lstm_layer(x)
-        #x = F.relu(x)
-        print(x.shape, hx.shape)
-        return torch.tanh(self.mean_layer(x)), F.softplus(self.std_layer(x))
+        mean = torch.tanh(self.mean_layer(x))
+        std = F.softplus(self.std_layer(x))
+        return mean, std
     
     def act(self, state) -> tuple[float, torch.Tensor]:
         state = torch.from_numpy(state).float().unsqueeze(0).to(device)
@@ -205,7 +193,8 @@ class ActorNetworkDiscrete(nn.Module):
         self.output_layer = nn.Linear(hidden_size, action_space)
 
     def forward(self, x) -> torch.Tensor:
-        x = F.relu(self.input_layer(x))
+        x = self.input_layer(x)
+        x = nn.LeakyReLU()(x)
         x = self.output_layer(x)
         return F.softmax(x, dim=1)
     
@@ -226,8 +215,11 @@ class ActorNetworkContinuous(nn.Module):
         self.std_layer = nn.Linear(hidden_size, 1)
     
     def forward(self, x) -> tuple[torch.Tensor, torch.Tensor]:
-        x = F.relu(self.input_layer(x))
-        return torch.tanh(self.mean_layer(x)), F.softplus(self.std_layer(x))
+        x = self.input_layer(x)
+        x = nn.LeakyReLU()(x)
+        mean = torch.tanh(self.mean_layer(x))
+        std = F.softplus(self.std_layer(x))
+        return mean, std
     
     def act(self, state) -> tuple[float, torch.Tensor]:
         state = torch.from_numpy(state).float().unsqueeze(0).to(device)
@@ -249,5 +241,5 @@ class CriticNetwork(nn.Module):
 
     def forward(self, x) -> torch.Tensor:
         x = self.input_layer(x)
-        x = F.relu(x)
+        x = nn.LeakyReLU()(x)
         return self.output_layer(x)
