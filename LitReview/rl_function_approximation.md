@@ -68,16 +68,14 @@ Artificial Neural Networks (ANNs) are widely used for nonlinear function approxi
 Neural nets are a collection of connected nodes which loosely model the neurons in the biological brain. The network is organized as a directed and weighted graph. 
 The nodes can transmit a signal, in the form of real numbers, to other nodes through weighted edges. 
 Based on the sum of its weighted input, a node's output is computed using a function called the activation function.
-Sigmoid functions like the logistic function are usually used, but other functions such as $tanh$ and $ReLU$ can also be used \cite{goodfellow2016deep}. 
 The goal is to optimize the weights of the neural net to optimize the objective function of the network. 
-Optimal performance is often determined by minimizing the mean squared error between the network's predicted output and the correct output. 
+Optimal performance is often determined by minimizing the mean squared error between the network's predicted output and some target output. 
 The weights in the network are usually optimized through a stochastic gradient method \cite{goodfellow2016deep}. 
 The weights are adjusted in the direction that optimizes the performance of the objective function. 
 A change in each weight must be judged in terms of how much it impacts the objective function's performance. 
 Using the current values of all the network's weights, the gradient represents the partial derivatives of the objective function with respect to each weight. 
 This gradient is usually computed using the backpropagation algorithm \cite{goodfellow2016deep}. 
-The nodes of an ANN are typically separated into layers; the input layer, one or more hidden layers, and the output layer. 
-The input layer sends signals to the hidden layer(s) and finally to the output layer. Their dimensions depend on the function being approximated. 
+The nodes of an ANN are typically separated into layers; the input layer, one or more hidden layers, and the output layer. Their dimensions depend on the function being approximated. 
 
 
 
@@ -87,30 +85,73 @@ Despite this ability to represent almost any function with only one hidden layer
 The class of ML algorithms that use neural nets with multiple layers is known as deep learning \cite{goodfellow2016deep}. Combining deep learning with reinforcement learning is known as deep reinforcement learning. 
 
 
-The simplest neural net is the feedforward network (FNN). 
-The connections in the feedforward network are a directed acyclic graph that only allows signals to travel forward in the network. 
+
+#### Activation Function. 
+The activation function adds nonlinearity to the neural net. Choosing the appropriate activation function depends on the specific problem. 
+Sigmoid functions like the logistic function are usually used, but other functions such as the hyperbolic tangent function $tanh$ can also be used. 
+The derivative of the logistic function is close to $0$ except in a small neighborhood around $0$. At each backward step, the $\delta$ is multiplied by the derivative of the activation function. 
+The gradient will therefore approach $0$, and thus produce extremely slow learning. 
+This is known as the vanishing gradient problem. 
+For this reason, the rectified linear unit (ReLU) is the default recommendation for activation function in modern deep neural nets \cite{goodfellow2016deep}. 
+ReLU is a ramp function defined as $ReLU(x) = \max \{0, x\}$.
+The derivative of the ReLU function is defined as 
+\begin{equation} 
+ReLU'(x) = 
+ {\begin{cases}
+ 0 & if\ x<0 \\
+ 1 & if\ x>0 \\
+ \end{cases} }
+\end{equation}
+The derivative is undefined for $x=0$, but it has subdifferential $[0,1]$, and it conventionally takes the value $ReLU'(0)=0$ in practical implementations. 
+Since ReLU is a piecewise linear function it optimizes well with gradient-based methods.
+
+
+ReLU suffers from what is known as the ``dying ReLU problem" where a large gradient could cause the weights of a node to update such that the node will never output anything but $0$. 
+Such nodes will not discriminate against any input, and are effectively ``dead". 
+This problem can be caused by unfortunate weight initialization or a too-high learning rate. 
+To combat the dying ReLU problem generalizations of the ReLU function like the Leaky ReLU (LReLU) activation function has been proposed \cite{goodfellow2016deep}. 
+Leaky ReLU allows a small "leak" for negative values proportional to some slope coefficient $a$, e.g., $a=0.01$, determined before training. 
+This allows small gradients to travel through inactive nodes. 
+Leaky ReLU will slowly converge even on randomly initialized weights, but can also reduce performance in some applications \cite{goodfellow2016deep}. 
+
+
+
+#### Feedforward Networks. 
+The simplest class of neural nets are the feedforward networks (FNNs). 
+The connections in a FNN are a directed acyclic graph that only allows signals to travel forward in the network. 
+The input travels from the input layer, through the hidden layer(s), and finally to the output layer. 
 There are no cycles where the output of a node can affect its subsequent input. 
+A feedforward net with depth $N$ can be represented as a chain of functions $f(x)=f^{(N)}(...(f^{(2)}(f^{(1)}(x))))$ where $f^{(j)}$ for $j\in[1,N]$ represents the layers of the network. 
+The final layer $f^{(N)}$ is the output layer, and the other layers are the hidden layers. 
 
 
 > Figure showing multi-layer perceptron network. 
 
 
+The universal approximation theorem states that any continuous mapping between two Euclidean spaces can be approximated by a feedforward network with a linear output layer and at least one hidden layer with a ``squashing" activation function, provided the network has enough hidden nodes \cite{goodfellow2016deep}
+
+
+
+#### Convolutional Neural Networks. 
 Convolutional Neural Networks (CNNs) define a class of neural nets that are specialized to process data with a known, grid-like topology such as time-series data or images \cite{goodfellow2016deep}. A CNN is a neural net that applies convolution instead of general matrix multiplication in at least one layer. 
 A convolution is a form of integral transform defined as the integral of the product of two functions after one is reflected about the y-axis and shifted \cite{goodfellow2016deep}. 
 Several successful deep RL applications use CNNs \cite{sutton2018reinforcement}.
 
 
+#### Recurrent Neural Networks. 
 Recurrent Neural Networks (RNNs) define a class of neural nets that allows connection between nodes to create cycles so that outputs from one node affect inputs to another. 
 This enables the networks to exhibit temporal dynamic behavior. 
 They are well suited for analyzing sequential data. 
-Long short-term memory (LSMT) is a form of RNN that recently has been successfully applied to financial time series forecasting \cite{siami2018forecasting}. 
+
+Long short-term memory (LSMT) is a form of RNN that is traditionally used in natural language processing. Recently LSMT networks has been successfully applied to financial time series forecasting \cite{siami2018forecasting}. 
 
 
+
+#### Bias. 
 The architecture of neural nets carries an a priori algorithmic preference, known as inductive bias. 
 For certain problems, specific network architectures can significantly outperform more deeply layered FNNs. 
 E.g., convolutional neural networks perform well when dealing with computer vision tasks, while Long Short Term Memory performs well when dealing with sequence data. 
 A neural net inductive bias should be compatible with the bias of the problem it is solving if it is to generalize well out-of-sample. 
-
 
 
 Online reinforcement learning is less prone to overfitting than traditional supervised learning approaches, as it does not use limited sets of training data. 
@@ -120,6 +161,7 @@ As deep reinforcement learning is applied to critical domains such as healthcare
 The test performance of deep RL agents that perform optimally during training has been shown to vary greatly \cite{zhang2018study}. 
 Separate training and testing sets with statistically tied data are recommended when training deep RL agents \cite{zhang2018study}. 
 Regularization of connection weights lowers the complexity of the network and can mitigate the risk of overfitting \cite{marsland2011machine}. 
+Weight decay is frequently used to regularize neural net loss functions by adding the sum of squares of the weights times a constant weight decay parameter $wd \in (0,1]$ \cite{goodfellow2016deep}. As the weight decay parameter $wd$ increases, larger weights are punished harsher. 
 Dropout is a regularization strategy that has been shown to reduce the risk of overfitting by randomly eliminating non-output nodes and their connections from an ensemble of sub-networks during training \cite{srivastava2014dropout}. 
 
 

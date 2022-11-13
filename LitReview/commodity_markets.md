@@ -27,8 +27,8 @@ Futures contract essentially achieves the same outcome as buying a commodity in 
 The relative price of these alternatives is connected as it presents an arbitrage opportunity. 
 The difference in price between a futures contract and the spot price of the underlying commodity will therefore depend on the financing cost, storage cost, and convenience yield of holding the physical commodity over the futures contract. 
 Physical traders use futures as a hedge while they are transporting commodities from producer to consumer. 
-If a trader wishes to extend the expiry of her futures contract, she can "roll" the contract by closing the contract about to expire and enter a new contract with the same terms, but a later expiry date \cite{chan2019financial}. 
-The "roll yield" is the difference in price for these two contracts and might be positive or negative.  
+If a trader wishes to extend the expiry of her futures contract, she can ``roll" the contract by closing the contract about to expire and enter a new contract with the same terms, but a later expiry date \cite{chan2019financial}. 
+The ``roll yield" is the difference in price for these two contracts and might be positive or negative.  
 
 Futures contracts involve future payments. There is always a risk that the other party might not be able to fulfill the obligations of the contract. 
 This is known as counterparty risk. 

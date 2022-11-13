@@ -30,7 +30,7 @@ class A2CLSTMActorContinuous(torch.nn.Module):
         mean = torch.tanh(self.mean_layer(x))
         std = F.softplus(self.std_layer(x))
 
-        mean = torch.clamp(mean, -1, 1)
+        mean = torch.clamp(mean, -1, 1) + 1. ##need to do this since the discrete outputs {0, 1, 2}
         std += 1e-5
         dist = Normal(mean, std)
 
@@ -40,7 +40,7 @@ class A2CLSTMActorContinuous(torch.nn.Module):
         state = torch.from_numpy(state).float().unsqueeze(0).to(device)
         m, hx = self.forward(state, hx)     
         action = m.sample() 
-        return torch.clamp(action, -1, 1).item(), hx
+        return (torch.clamp(action, 0, 2).item() - 1.), hx
 
 
 class A2CLSTMActorDiscrete(torch.nn.Module):
