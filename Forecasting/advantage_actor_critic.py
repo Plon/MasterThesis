@@ -67,14 +67,14 @@ class A2CLSTMActorDiscrete(torch.nn.Module):
         return (action.item() - 1), hx
 
 
-def update(replay_buffer: ReplayMemory, batch_size: int, actor: torch.nn.Module, critic: torch.nn.Module, critic_target: torch.nn.Module, optimizer_actor: torch.optim, optimizer_critic: torch.optim, R_hat: torch.Tensor) -> torch.Tensor: 
+def update(replay_buffer: ReplayMemory, batch_size: int, actor: torch.nn.Module, critic: torch.nn.Module, critic_target: torch.nn.Module, optimizer_actor: torch.optim, optimizer_critic: torch.optim) -> None: 
     batch = get_batch(replay_buffer, batch_size)
     if batch is None:
         return 0
     state_batch, action_batch, reward_batch, next_state_batch = batch
     action_batch = action_batch + 1 #need to do because i -1 actions
 
-    advantage = get_advantage(critic, critic_target, state_batch, reward_batch, next_state_batch, R_hat)
+    advantage = get_advantage(critic, critic_target, state_batch, reward_batch, next_state_batch)
 
     critic_loss = advantage.pow(2).mean()
     optimize(optimizer_critic, critic_loss)
@@ -83,8 +83,6 @@ def update(replay_buffer: ReplayMemory, batch_size: int, actor: torch.nn.Module,
     actor_loss = (-log_probs * advantage.detach()).mean()
     optimize(optimizer_actor, actor_loss)
 
-    return advantage.detach().mean()
-
 
 def optimize(optimizer, loss) -> None: 
     optimizer.zero_grad()
@@ -92,12 +90,12 @@ def optimize(optimizer, loss) -> None:
     optimizer.step()
 
 
-def get_advantage(critic_net, critic_target, state, reward, next_state, R_hat) -> torch.Tensor:
+def get_advantage(critic_net, critic_target, state, reward, next_state) -> torch.Tensor:
     state_val = critic_net(state).squeeze()
     with torch.no_grad():
         #next_state_val = critic_net(next_state).squeeze()
         next_state_val = critic_target(next_state).squeeze()
-    advantage = reward - R_hat + next_state_val - state_val
+    advantage = reward + next_state_val - state_val
     return advantage 
 
 
@@ -107,14 +105,13 @@ def get_log_probs(actor, state, action) -> torch.Tensor:
     return log_probs
 
 
-def advantage_actor_critic(actor_net, critic_net, env, alpha_actor=1e-1, alpha_critic=1e-3, weight_decay=1e-6, alpha_R_hat=1e-1, batch_size=10, num_episodes=np.iinfo(np.int32).max, train=True) -> tuple[np.ndarray, np.ndarray]: 
+def advantage_actor_critic(actor_net, critic_net, env, alpha_actor=1e-1, alpha_critic=1e-3, weight_decay=1e-6, batch_size=10, num_episodes=np.iinfo(np.int32).max, train=True) -> tuple[np.ndarray, np.ndarray]: 
     # Trains the actor-critic with eligibility traces in the continuing undiscounted setting 
     critic_target_net = deepcopy(critic_net)
     optimizer_actor = optim.Adam(actor_net.parameters(), lr=alpha_actor, weight_decay=weight_decay)
     optimizer_critic = optim.Adam(critic_net.parameters(), lr=alpha_critic, weight_decay=weight_decay)
     rewards = []
     actions = []
-    R_hat = 0
     hx = None
     state = env.state()
     batch_size = max(2, batch_size) ###
@@ -127,7 +124,7 @@ def advantage_actor_critic(actor_net, critic_net, env, alpha_actor=1e-1, alpha_c
         if done:
             if train:
                 batch_size = max(2, (i % batch_size))
-                update(replay_buffer, batch_size, actor_net, critic_net, critic_target_net, optimizer_actor, optimizer_critic, R_hat)
+                update(replay_buffer, batch_size, actor_net, critic_net, critic_target_net, optimizer_actor, optimizer_critic)
             break
 
         actions.append(action)
@@ -139,8 +136,7 @@ def advantage_actor_critic(actor_net, critic_net, env, alpha_actor=1e-1, alpha_c
 
         if train:
             if (i+1) % batch_size == 0:
-                advantage = update(replay_buffer, batch_size, actor_net, critic_net, critic_target_net, optimizer_actor, optimizer_critic, R_hat)
-                R_hat += alpha_R_hat * advantage.detach().mean()
+                update(replay_buffer, batch_size, actor_net, critic_net, critic_target_net, optimizer_actor, optimizer_critic)
                 soft_updates(critic_net, critic_target_net, 0.5)
   
         state = next_state
