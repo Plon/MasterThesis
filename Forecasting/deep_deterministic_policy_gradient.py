@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from batch_learning import ReplayMemory, Transition, get_batch
+from reinforce import optimize
 nn_activation_function = nn.LeakyReLU()
 
 
@@ -69,7 +70,7 @@ def update(replay_buffer: ReplayMemory, batch_size: int, critic: torch.nn.Module
     
     #Compute loss and optimize critic
     c_loss = compute_critic_loss(actor_target, critic, critic_target, batch)
-    optimize(c_loss, optimizer_critic)
+    optimize(optimizer_critic, c_loss)
 
     # Freeze Q-net
     for p in critic.parameters(): 
@@ -77,18 +78,11 @@ def update(replay_buffer: ReplayMemory, batch_size: int, critic: torch.nn.Module
 
     # Compute loss and optimize actor 
     a_loss = compute_actor_loss(actor, critic, batch[0])
-    optimize(a_loss, optimizer_actor)
+    optimize(optimizer_actor, a_loss)
 
     # Unfreeze Q-net
     for p in critic.parameters(): 
         p.requires_grad = True
-
-
-def optimize(loss, optimizer) -> None:
-    """ Backpropagate and optimization step """
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
 
 
 def compute_actor_loss(mu, q, s) -> torch.Tensor: 
@@ -101,7 +95,7 @@ def compute_actor_loss(mu, q, s) -> torch.Tensor:
 
 def compute_critic_loss(actor_target, critic, critic_target, batch) -> torch.Tensor: 
     """ Returns Q loss Q(s_t, a) - (R_t+1 + Q'(s_t+1, mu'(s_t+1))) """
-    state, action, reward, next_state = batch    
+    state, action, reward, next_state = batch
     with torch.no_grad():
         a_hat = actor_target(next_state)
         q_sa_hat = critic_target(next_state, a_hat).squeeze()
@@ -110,7 +104,7 @@ def compute_critic_loss(actor_target, critic, critic_target, batch) -> torch.Ten
     return loss
 
 
-def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e-3, alpha_critic=1e-3, weight_decay=1e-3, target_learning_rate=1e-1, batch_size=30, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0, num_episodes=np.iinfo(np.int32).max, train=True) -> tuple[np.ndarray, np.ndarray]: 
+def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e-3, alpha_critic=1e-3, weight_decay=1e-3, target_learning_rate=1e-1, batch_size=30, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100) -> tuple[np.ndarray, np.ndarray]: 
     """
     Training for DDPG
 
@@ -135,35 +129,51 @@ def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e
     critic_target_net = deepcopy(critic_net)
     optimizer_actor = optim.Adam(actor_net.parameters(), lr=alpha_actor, weight_decay=weight_decay)
     optimizer_critic = optim.Adam(critic_net.parameters(), lr=alpha_critic, weight_decay=weight_decay)
-    rewards = []
-    actions = []
     replay_buffer = ReplayMemory(1000)
-    state = env.state() 
+    reward_history = []
+    action_history = []
+
     if not train:
         exploration_rate = exploration_min
     
-    for i in range(num_episodes):
-        action = act(actor_net, state, exploration_rate) 
-        next_state, reward, done, _ = env.step(action) 
+    for n in range(num_episodes):
+        rewards = []
+        actions = []
+        state = env.reset() 
 
-        if done:
-            if train:
-                update(replay_buffer, max(2, (i%batch_size)), critic_net, critic_target_net, actor_net, actor_target_net, optimizer_critic, optimizer_actor)
-            break
+        for i in range(max_episode_length):
+            action = act(actor_net, state, exploration_rate) 
+            next_state, reward, done, _ = env.step(action) 
 
-        actions.append(action)
-        rewards.append(reward)
-        replay_buffer.push(torch.from_numpy(state).float().unsqueeze(0).to(device), 
-                           torch.FloatTensor([action]), 
-                           torch.FloatTensor([reward]), 
-                           torch.from_numpy(next_state).float().unsqueeze(0).to(device))
+            if done:
+                if train:
+                    update(replay_buffer, max(2, (i%batch_size)), critic_net, critic_target_net, actor_net, actor_target_net, optimizer_critic, optimizer_actor)
+                break
 
-        if train and len(replay_buffer) >= batch_size and i % batch_size == 0: 
-            update(replay_buffer, batch_size, critic_net, critic_target_net, actor_net, actor_target_net, optimizer_critic, optimizer_actor)
-            soft_updates(critic_net, critic_target_net, target_learning_rate)
-            soft_updates(actor_net, actor_target_net, target_learning_rate)
+            actions.append(action)
+            rewards.append(reward)
+            replay_buffer.push(torch.from_numpy(state).float().unsqueeze(0).to(device), 
+                            torch.FloatTensor([action]), 
+                            torch.FloatTensor([reward]), 
+                            torch.from_numpy(next_state).float().unsqueeze(0).to(device))
 
-        state = next_state
-        exploration_rate = max(exploration_rate*exploration_decay, exploration_min)
+            if train and len(replay_buffer) >= batch_size and i % batch_size == 0: 
+                update(replay_buffer, batch_size, critic_net, critic_target_net, actor_net, actor_target_net, optimizer_critic, optimizer_actor)
+                soft_updates(critic_net, critic_target_net, target_learning_rate)
+                soft_updates(actor_net, actor_target_net, target_learning_rate)
 
-    return np.array(rewards), np.array(actions)
+            state = next_state
+            exploration_rate = max(exploration_rate*exploration_decay, exploration_min)
+
+        if print_res:
+            if n % print_freq == 0:
+                print("Episode ", n)
+                print("Actions: ", np.array(actions))
+                print("Sum rewards: ", sum(rewards))
+                print("-"*20)
+                print()
+        
+        reward_history.append(sum(rewards))
+        action_history.append(np.array(actions))
+
+    return np.array(reward_history), np.array(action_history)

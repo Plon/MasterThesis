@@ -10,38 +10,44 @@ def optimize(optimizer, loss) -> None:
     optimizer.step()
 
 
-def reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=np.iinfo(np.int32).max, train=True) -> tuple[np.ndarray, np.ndarray]: 
-    """
-    Online Monte Carlo policy gradient 
-    Every trajectory consists of one step, and then the loss is computed
-
-    Args: 
-        policy_network (nn.Model): network that parameterizes the policy
-        env: environment that the rl agent interacts with
-        alpha (float): learning rate
-        weight_decay (float): regularization 
-        num_episodes (int): maximum number of episodes
-    Returns: 
-        scores (numpy.ndarray): the rewards of each episode
-        actions (numpy.ndarray): the actions chosen by the agent
-    """
+def reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100) -> tuple[np.ndarray, np.ndarray]: 
     optimizer = optim.Adam(policy_network.parameters(), lr=alpha, weight_decay=weight_decay)
-    rewards = [] 
-    actions = [] 
-    state = env.state() #S_0
+    reward_history = []
+    action_history = []
 
-    for _ in range(num_episodes):
-        action, log_prob = policy_network.act(state) #A_{t-1}
-        state, reward, done, _ = env.step(action) # S_t, R_t 
+    for n in range(num_episodes):
+        state = env.reset() #S_0
+        rewards = [] 
+        actions = [] 
+        log_probs = []  
 
-        if done:
-            break
+        for _ in range(max_episode_length):
+            action, log_prob = policy_network.act(state) #A_{t-1}
+            state, reward, done, _ = env.step(action) # S_t, R_t 
 
-        actions.append(action)
-        rewards.append(reward) 
+            if done:
+                break
+
+            actions.append(action)
+            rewards.append(reward) 
+            log_probs.append(log_prob)
 
         if train:
-            loss = - log_prob * reward
-            optimize(optimizer, loss)
+            r = torch.FloatTensor(rewards)
+            r = (r - r.mean()) / (r.std() + float(np.finfo(np.float32).eps))
+            log_probs = torch.stack(log_probs).squeeze()
+            policy_loss = torch.mul(log_probs, r).mul(-1).sum()
+            optimize(optimizer, policy_loss)
 
-    return np.array(rewards), np.array(actions)
+        if print_res:
+            if n % print_freq == 0:
+                print("Episode ", n)
+                print("Actions: ", np.array(actions))
+                print("Sum rewards: ", sum(rewards))
+                print("-"*20)
+                print()
+        
+        reward_history.append(sum(rewards))
+        action_history.append(np.array(actions))
+
+    return np.array(reward_history), np.array(action_history)

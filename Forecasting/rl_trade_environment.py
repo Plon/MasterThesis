@@ -25,10 +25,18 @@ class TradeEnvironment():
 
         self.current_price = self.prices[self.current_index]
         self.position = 0 #start position is an empty portfolio
-        self.returns = [0 for _ in range(10)] # returns
+        self.returns = [0 for _ in range(10)] 
 
         self.observations = np.array([self.newest_observation() for _ in range(num_prev_observations)]) # State vector of previous n observations
 
+    def reset(self) -> np.ndarray:
+        """ Reset environment to start and return initial state """
+        self.current_index = 0 
+        self.year_cycle, self.week_cycle, self.day_cycle = self.time_cycle()
+        self.position = 0
+        self.returns = [0 for _ in range(10)] 
+        self.observations = np.array([self.newest_observation() for _ in range(len(self.observations))]) # State vector of previous n observations
+        return self.observations.flatten()
 
     def time_cycle(self) -> tuple[float, float, float]:
         """ Returns the current position in the year, week, day cycle """
@@ -40,6 +48,7 @@ class TradeEnvironment():
 
     def state(self) -> np.ndarray:
         """ Returns the state vector in a flattened format """
+        #TODO change for conv nets
         return self.observations.flatten()
 
     def newest_observation(self) -> np.ndarray:
@@ -67,6 +76,7 @@ class TradeEnvironment():
 
     def reward_function(self, action) -> float: 
         """ R_t = A_{t-1} * (p_t - p_{t-1}) - p_{t-1} * c * |A_{t-1} - A_{t-2}| """  
+        #return torch.nn.MSELoss()(action, self.prices[self.current_index]) #for regression
         return action * (self.prices[self.current_index] - self.current_price) - self.current_price * self.transaction_fraction * abs(action - self.position)
 
     def step(self, action) -> tuple[np.ndarray, float, bool, dict]:
@@ -126,6 +136,7 @@ if __name__ == '__main__':
     from deep_deterministic_policy_gradient import deep_determinstic_policy_gradient, DDPG_Actor, DDPG_Critic
     from advantage_actor_critic import advantage_actor_critic, A2CLSTMActorDiscrete, A2CLSTMActorContinuous
     from reinforce_baseline import reinforce_baseline
+    from recurrent_reinforce import recurrent_reinforce, LSTMContinuous, ConvLSTMContinuous, LSTMDiscrete
     import plotly.express as px
     import matplotlib.pyplot as plt
 
@@ -142,170 +153,93 @@ if __name__ == '__main__':
     col_scores = []
     num_runs = 500
 
+    te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
+
     ### REINFORCE
     """
     policy = ActorNetworkDiscrete(observation_space=total_num_features).to(device)
-    scores = []
-
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = reinforce(policy, te)
-        if _ % 100 == 0:     
-            print(_, sum(score), actions)        
-        scores.append(sum(score))
-    col_scores.append(scores)
+    scores, actions = reinforce(policy, te)
     #"""
 
     ### REINFORCE with baseline
-    #"""
+    """
     policy = ActorNetworkDiscrete(observation_space=total_num_features).to(device)
     value_function = CriticNetwork(observation_space=total_num_features).to(device)
-    scores = []
-
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-3, alpha_vf=1e-5)
-        if _ % 100 == 0:     
-            print(_, sum(score), actions)        
-        scores.append(sum(score))
-    col_scores.append(scores)
+    scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-3, alpha_vf=1e-5)
     #"""
 
     ### REINFORCE CONTINUOUS ACTION SPACE
     """
     policy = ActorNetworkContinuous(observation_space=total_num_features).to(device)
-    scores = []
-
-    num_runs = 3000
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = reinforce(policy, te, alpha=1e-5)
-        if _ % 100 == 0: 
-            print(_, sum(score), actions)        
-        scores.append(sum(score))
-    col_scores.append(scores)    
+    scores, actions = reinforce(policy, te, alpha=1e-4)
     #"""
 
-    ### REINFORCE LSTM
+
+    ### REINFORCE LSTM without hidden states
     """
     policy = ActorNetworkLSTMDiscrete(observation_space=total_num_features, n_layers=2).to(device)
-    scores = []
-
-    num_runs = 1000
-
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = reinforce(policy, te)
-        if _ % 100 == 0: 
-            print(_, sum(score), actions)  
-        scores.append(sum(score))
-    col_scores.append(scores)
+    scores, actions = reinforce(policy, te)
     #"""
 
-    ### REINFORCE LSTM Continuous Action Space
+
+    ### REINFORCE LSTM without hidden state Continuous Action Space
     """
     policy = ActorNetworkLSTMContinuous(observation_space=total_num_features, n_layers=2).to(device)
-    scores = []
-    num_runs = 2000
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = reinforce(policy, te, alpha=1e-5)
-        if _ % 100 == 0: 
-            print(_, sum(score), actions)  
-        scores.append(sum(score))
-    col_scores.append(scores) 
+    scores, actions = reinforce(policy, te, alpha=1e-4)    
+    #"""
+
+    ### Recurrent REINFORCE LSTM Continuous Action Space
+    #"""
+    #policy = LSTMContinuous(observation_space=total_num_features, n_layers=3, dropout=0.01).to(device)
+    policy = LSTMDiscrete(observation_space=total_num_features, n_layers=3, dropout=0.01).to(device)
+    #policy = ConvLSTMContinuous(observation_space=total_num_features, num_lstm_layers=3, dropout=0.01).to(device)
+    scores, actions = recurrent_reinforce(policy, te, alpha=1e-4)
     #"""
 
     ### REINFORCE Conv
     """
     policy = ActorNetwork1DConvolutionalDiscrete(observation_space=total_num_features).to(device)
-    scores = []
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = reinforce(policy, te)
-        if _ % 50 == 0: 
-            print(_, sum(score), actions)  
-        scores.append(sum(score))
-    col_scores.append(scores)    
+    scores, actions = reinforce(policy, te)
     #"""
     
     ### REINFORCE Conv Continuous Action Space
     """
     policy = ActorNetwork1DConvolutionalContinuous(observation_space=total_num_features).to(device)
-    scores = []
-
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = reinforce(policy, te, alpha=1e-5)
-        if _ % 50 == 0: 
-            print(_, sum(score), actions)  
-        scores.append(sum(score))
-    col_scores.append(scores)    
+    scores, actions = reinforce(policy, te, alpha=1e-3)
     #"""
 
-    ### REINFORCE Conv LSTM
+    ### REINFORCE Conv LSTM without hidden states
     """
     policy = ActorNetwork1DConvolutionalLSTMDiscrete(observation_space=total_num_features, num_lstm_layers=2).to(device)
-    scores = []
-
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = reinforce(policy, te)
-        print(actions)
-        scores.append(sum(score))
-    col_scores.append(scores)
+    scores, actions = reinforce(policy, te)
     #"""
 
-    ### REINFORCE Conv LSTM Continuous Action Space
+    ### REINFORCE Conv LSTM without hidden state Continuous Action Space
     """
     policy = ActorNetwork1DConvolutionalLSTMContinuous(observation_space=total_num_features, num_lstm_layers=2).to(device)
-    scores = []
-    num_runs = 1000
+    scores, actions = reinforce(policy, te, alpha=1e-4)
+    #"""
 
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = reinforce(policy, te, alpha=1e-5)
-        if _ % 50 == 0: 
-            print(_, sum(score), actions)          
-        scores.append(sum(score))
-    col_scores.append(scores)
+    ### Recurrent REINFORCE Conv LSTM Continuous Action Space
+    #TODO fix lstm recurrence x = hx stuff
+    """
+    policy = ConvLSTMContinuous(observation_space=total_num_features, num_lstm_layers=2).to(device)
+    scores, actions = recurrent_reinforce(policy, te, alpha=1e-4)
     #"""
 
     ### ACTOR-CRITIC with eligibility traces
     """
     actor = ActorNetworkDiscrete(observation_space=total_num_features).to(device)
     critic = CriticNetwork(observation_space=total_num_features).to(device)
-    scores = []
-
-    num_runs = 500
-
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = actor_critic(actor, critic, te, alpha_actor=1e-1, alpha_critic=1e-1)
-        #print(_, sum(score), actions)          
-        if _ % 100 == 0: 
-            print(_, sum(score), actions)     
-        scores.append(sum(score))
-    col_scores.append(scores)
-    #"""   
+    scores, actions = actor_critic(actor, critic, te, alpha_actor=1e-2, alpha_critic=1e-1)
+    #"""
 
     ### ACTOR-CRITIC with eligibility traces CONTINUOUS ACTION SPACE
     """
     actor = ActorNetworkContinuous(observation_space=total_num_features).to(device)
     critic = CriticNetwork(observation_space=total_num_features).to(device)
-    scores = []
-
-    num_runs = 1000
-
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-3)
-        if _ % 100 == 0: 
-            print(_, sum(score), actions) 
-        scores.append(sum(score))
-    col_scores.append(scores)
+    scores, actions = actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-3)
     #"""
-
 
     #TODO try with different number of layers, also do same with drqn
     ### ACTOR-CRITIC with batched learning
@@ -313,81 +247,30 @@ if __name__ == '__main__':
     #actor = ActorNetworkDiscrete(observation_space=total_num_features).to(device)
     critic = CriticNetwork(observation_space=total_num_features).to(device)
     actor = A2CLSTMActorDiscrete(observation_space=total_num_features).to(device)
-    scores = []
-
-    num_runs = 2000
-
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        #score, actions = advantage_actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-5, batch_size=20)
-        score, actions = advantage_actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-3, batch_size=20)
-        if _ % 100 == 0: 
-            print(_, sum(score), actions)
-        scores.append(sum(score))
-    col_scores.append(scores)
-    #"""   
+    scores, actions = advantage_actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-3, batch_size=20)
+    #"""
 
     ### ACTOR-CRITIC CONTINUOUS ACTION SPACE with batched learning
     """
     actor = A2CLSTMActorContinuous(observation_space=total_num_features).to(device)
     #actor = ActorNetworkContinuous(observation_space=total_num_features).to(device)
     critic = CriticNetwork(observation_space=total_num_features).to(device)
-    scores = []
-
-    num_runs = 2000
-
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = advantage_actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-1, batch_size=50, weight_decay=0)
-        if _ % 100 == 0: 
-            print(_, sum(score), actions) 
-        scores.append(sum(score))
-    col_scores.append(scores)
+    scores, actions = advantage_actor_critic(actor, critic, te, alpha_actor=1e-4, alpha_critic=1e-2, batch_size=50)
     #"""
-
 
     #TODO gradient explodes and favours one action, random exploration like this not feasible for live trading
     ### DQN 
     """
     #q_net = CriticNetwork(observation_space=total_num_features, action_space=3).to(device)
     q_net = DQN(observation_space=total_num_features, action_space=3).to(device)
-
-    scores = []
-    num_runs = 3000
-    for _ in range(num_runs):
-        #te = TradeEnvironment(hist_bar, num_prev_observations=1)
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = deep_q_network(q_net, te, batch_size=50, alpha=1e-5)
-        #print(_, sum(score), actions)
-        if _ % 50 == 0:
-            print(_, sum(score), actions)
-            print(torch.nn.utils.clip_grad_norm_(q_net.parameters(), 1)) #Can be useful to detect gradient explotion
-        scores.append(sum(score))
-    col_scores.append(scores)
-    #"""    
+    scores, actions = deep_q_network(q_net, te, batch_size=50, alpha=1e-3)
+    #"""  
     
     ### DRQN 
     """
     q_net = DRQN(observation_space=total_num_features, action_space=3).to(device)
     #q_net = DLSTMQN(observation_space=total_num_features, action_space=3, num_lstm_layers=1).to(device)
-    
-    scores = []
-    num_runs = 3000
-    prev_actions = 0
-    for _ in range(num_runs):
-        #te = TradeEnvironment(hist_bar, num_prev_observations=1)
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = deep_recurrent_q_network(q_net, te, batch_size=50, alpha=1e-4)
-        #print(_, sum(score), actions)
-        if _ % 50 == 0:
-            if _ > 0:
-                strat_dist = sum((prev_actions - actions)**2)**0.5/len(actions)
-                print("Strat dist: ", strat_dist)
-            print(_, sum(score), actions)
-            print(torch.nn.utils.clip_grad_norm_(q_net.parameters(), 1)) #Can be useful to detect gradient explotion
-            prev_actions = actions
-        scores.append(sum(score))
-    col_scores.append(scores)
+    scores, actions = deep_recurrent_q_network(q_net, te, batch_size=50, alpha=1e-3)
     #"""
 
     ### DDPG
@@ -395,18 +278,7 @@ if __name__ == '__main__':
     """
     actor = DDPG_Actor(observation_space=total_num_features).to(device)
     critic = DDPG_Critic(observation_space=total_num_features).to(device)
-    
-    scores = []
-    num_runs = 2000
-    for _ in range(num_runs):
-        te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-        score, actions = deep_determinstic_policy_gradient(actor, critic, te, batch_size=10, alpha_critic=1e-3, alpha_actor=1e-3)
-        if _ % 50 == 0:# or True:
-            print(_, sum(score), actions)
-            print(torch.nn.utils.clip_grad_norm_(actor.parameters(), 1)) #Can be useful to detect gradient explotion
-            print(torch.nn.utils.clip_grad_norm_(critic.parameters(), 1)) #Can be useful to detect gradient explotion
-        scores.append(sum(score))
-    col_scores.append(scores)
+    scores, actions = deep_determinstic_policy_gradient(actor, critic, te, batch_size=10, alpha_critic=1e-6, alpha_actor=1e-1)
     #"""
 
     ### PLOTS
