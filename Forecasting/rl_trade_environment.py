@@ -77,7 +77,7 @@ class TradeEnvironment():
     def reward_function(self, action) -> float: 
         """ R_t = A_{t-1} * (p_t - p_{t-1}) - p_{t-1} * c * |A_{t-1} - A_{t-2}| """  
         #return torch.nn.MSELoss()(action, self.prices[self.current_index]) #for regression
-        return action * (self.prices[self.current_index] - self.current_price) - self.current_price * self.transaction_fraction * abs(action - self.position)
+        return (action * (self.prices[self.current_index] - self.current_price)) - (self.current_price * self.transaction_fraction * abs(action - self.position))
 
     def step(self, action) -> tuple[np.ndarray, float, bool, dict]:
         """
@@ -128,15 +128,16 @@ if __name__ == '__main__':
     sys.path.append('/Users/jonashanetho/Desktop/Masteroppgave/MasterThesis/Bars/')
     from bars import Imbalance_Bars, Bars
     import yfinance as yf
-    from networks import ActorNetworkContinuous, ActorNetworkDiscrete, ActorNetworkLSTMDiscrete, ActorNetworkLSTMContinuous, ActorNetwork1DConvolutionalDiscrete, ActorNetwork1DConvolutionalContinuous, ActorNetwork1DConvolutionalLSTMDiscrete, ActorNetwork1DConvolutionalLSTMContinuous, CriticNetwork
+    from networks import AConvContinuous, AConvDiscrete, AConvLSTMContinuous, AConvLSTMDiscrete, AFFContinuous, FFDiscrete, ALSTMContinuous, ALSTMDiscrete
     from reinforce import reinforce
     from actor_critic_eligibility_traces import actor_critic
-    from deep_q_network import deep_q_network, DQN
-    from deep_recurrent_q_network import deep_recurrent_q_network, DLSTMQN, DRQN
+    from deep_q_network import deep_q_network
+    from deep_recurrent_q_network import deep_recurrent_q_network
     from deep_deterministic_policy_gradient import deep_determinstic_policy_gradient, DDPG_Actor, DDPG_Critic
-    from advantage_actor_critic import advantage_actor_critic, A2CLSTMActorDiscrete, A2CLSTMActorContinuous
+    from advantage_actor_critic import advantage_actor_critic
     from reinforce_baseline import reinforce_baseline
-    from recurrent_reinforce import recurrent_reinforce, LSTMContinuous, ConvLSTMContinuous, LSTMDiscrete
+    from recurrent_reinforce import recurrent_reinforce
+    from recurrent_reinforce_baseline import recurrent_reinforce_baseline
     import plotly.express as px
     import matplotlib.pyplot as plt
 
@@ -155,122 +156,107 @@ if __name__ == '__main__':
 
     te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
 
-    ### REINFORCE
+    ### REINFORCE feedforward
     """
-    policy = ActorNetworkDiscrete(observation_space=total_num_features).to(device)
+    policy = FFDiscrete(observation_space=total_num_features).to(device)
     scores, actions = reinforce(policy, te)
     #"""
 
-    ### REINFORCE with baseline
+    ### REINFORCE feedwordward with baseline
     """
-    policy = ActorNetworkDiscrete(observation_space=total_num_features).to(device)
-    value_function = CriticNetwork(observation_space=total_num_features).to(device)
+    policy = FFDiscrete(observation_space=total_num_features).to(device)
+    value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
     scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-3, alpha_vf=1e-5)
     #"""
 
-    ### REINFORCE CONTINUOUS ACTION SPACE
+    ### REINFORCE feedwordard CONTINUOUS ACTION SPACE
     """
-    policy = ActorNetworkContinuous(observation_space=total_num_features).to(device)
+    policy = AFFContinuous(observation_space=total_num_features).to(device)
     scores, actions = reinforce(policy, te, alpha=1e-4)
     #"""
 
-
-    ### REINFORCE LSTM without hidden states
+    ### Recurrent REINFORCE LSTM Discrete & Continuous Action Space
     """
-    policy = ActorNetworkLSTMDiscrete(observation_space=total_num_features, n_layers=2).to(device)
-    scores, actions = reinforce(policy, te)
-    #"""
-
-
-    ### REINFORCE LSTM without hidden state Continuous Action Space
-    """
-    policy = ActorNetworkLSTMContinuous(observation_space=total_num_features, n_layers=2).to(device)
-    scores, actions = reinforce(policy, te, alpha=1e-4)    
-    #"""
-
-    ### Recurrent REINFORCE LSTM Continuous Action Space
-    #"""
-    #policy = LSTMContinuous(observation_space=total_num_features, n_layers=3, dropout=0.01).to(device)
-    policy = LSTMDiscrete(observation_space=total_num_features, n_layers=3, dropout=0.01).to(device)
-    #policy = ConvLSTMContinuous(observation_space=total_num_features, num_lstm_layers=3, dropout=0.01).to(device)
+    policy = ALSTMDiscrete(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
+    #policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
     scores, actions = recurrent_reinforce(policy, te, alpha=1e-4)
+    #"""
+
+    ### Recurrent REINFORCE with baseline LSTM Discrete & Continuous Action Space
+    """
+    policy = ALSTMDiscrete(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
+    #policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
+    value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
+    scores, actions = recurrent_reinforce_baseline(policy, value_function, te, alpha_policy=1e-4, alpha_vf=1e-5)
     #"""
 
     ### REINFORCE Conv
     """
-    policy = ActorNetwork1DConvolutionalDiscrete(observation_space=total_num_features).to(device)
+    policy = AConvDiscrete(observation_space=total_num_features).to(device)
     scores, actions = reinforce(policy, te)
     #"""
     
     ### REINFORCE Conv Continuous Action Space
     """
-    policy = ActorNetwork1DConvolutionalContinuous(observation_space=total_num_features).to(device)
+    policy = AConvContinuous(observation_space=total_num_features).to(device)
     scores, actions = reinforce(policy, te, alpha=1e-3)
     #"""
 
-    ### REINFORCE Conv LSTM without hidden states
+    ### Recurrent REINFORCE Conv LSTM 
     """
-    policy = ActorNetwork1DConvolutionalLSTMDiscrete(observation_space=total_num_features, num_lstm_layers=2).to(device)
-    scores, actions = reinforce(policy, te)
-    #"""
-
-    ### REINFORCE Conv LSTM without hidden state Continuous Action Space
-    """
-    policy = ActorNetwork1DConvolutionalLSTMContinuous(observation_space=total_num_features, num_lstm_layers=2).to(device)
-    scores, actions = reinforce(policy, te, alpha=1e-4)
+    policy = AConvLSTMDiscrete(observation_space=total_num_features, num_lstm_layers=2).to(device)
+    scores, actions = recurrent_reinforce(policy, te, alpha=1e-4, num_episodes=2000)
     #"""
 
     ### Recurrent REINFORCE Conv LSTM Continuous Action Space
-    #TODO fix lstm recurrence x = hx stuff
     """
-    policy = ConvLSTMContinuous(observation_space=total_num_features, num_lstm_layers=2).to(device)
+    policy = AConvLSTMContinuous(observation_space=total_num_features, num_lstm_layers=2).to(device)
     scores, actions = recurrent_reinforce(policy, te, alpha=1e-4)
     #"""
 
     ### ACTOR-CRITIC with eligibility traces
+    #TODO make compatible with recurrent nets
     """
-    actor = ActorNetworkDiscrete(observation_space=total_num_features).to(device)
-    critic = CriticNetwork(observation_space=total_num_features).to(device)
-    scores, actions = actor_critic(actor, critic, te, alpha_actor=1e-2, alpha_critic=1e-1)
+    #actor = FFDiscrete(observation_space=total_num_features).to(device)
+    actor = AConvDiscrete(observation_space=total_num_features).to(device)
+    critic = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
+    scores, actions = actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-2)
     #"""
 
     ### ACTOR-CRITIC with eligibility traces CONTINUOUS ACTION SPACE
     """
-    actor = ActorNetworkContinuous(observation_space=total_num_features).to(device)
-    critic = CriticNetwork(observation_space=total_num_features).to(device)
+    actor = AFFContinuous(observation_space=total_num_features).to(device)
+    critic = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
     scores, actions = actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-3)
     #"""
 
-    #TODO try with different number of layers, also do same with drqn
     ### ACTOR-CRITIC with batched learning
     """
-    #actor = ActorNetworkDiscrete(observation_space=total_num_features).to(device)
-    critic = CriticNetwork(observation_space=total_num_features).to(device)
-    actor = A2CLSTMActorDiscrete(observation_space=total_num_features).to(device)
-    scores, actions = advantage_actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-3, batch_size=20)
+    actor = ALSTMDiscrete(observation_space=total_num_features, n_layers=1).to(device)
+    critic = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
+    scores, actions = advantage_actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-3, batch_size=50)
     #"""
 
     ### ACTOR-CRITIC CONTINUOUS ACTION SPACE with batched learning
+    #TODO doesnt work well
     """
-    actor = A2CLSTMActorContinuous(observation_space=total_num_features).to(device)
-    #actor = ActorNetworkContinuous(observation_space=total_num_features).to(device)
-    critic = CriticNetwork(observation_space=total_num_features).to(device)
-    scores, actions = advantage_actor_critic(actor, critic, te, alpha_actor=1e-4, alpha_critic=1e-2, batch_size=50)
+    actor = ALSTMContinuous(observation_space=total_num_features, n_layers=3).to(device)
+    critic = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
+    scores, actions = advantage_actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-3, batch_size=50, discrete=False)
     #"""
 
-    #TODO gradient explodes and favours one action, random exploration like this not feasible for live trading
     ### DQN 
     """
-    #q_net = CriticNetwork(observation_space=total_num_features, action_space=3).to(device)
-    q_net = DQN(observation_space=total_num_features, action_space=3).to(device)
-    scores, actions = deep_q_network(q_net, te, batch_size=50, alpha=1e-3)
-    #"""  
+    #q_net = FFDiscrete(observation_space=total_num_features, action_space=3).to(device)
+    q_net = AConvDiscrete(observation_space=total_num_features, action_space=3).to(device)
+    scores, actions = deep_q_network(q_net, te, batch_size=10, alpha=1e-4, num_episodes=1000)
+    #"""
     
     ### DRQN 
     """
-    q_net = DRQN(observation_space=total_num_features, action_space=3).to(device)
-    #q_net = DLSTMQN(observation_space=total_num_features, action_space=3, num_lstm_layers=1).to(device)
-    scores, actions = deep_recurrent_q_network(q_net, te, batch_size=50, alpha=1e-3)
+    q_net = AConvLSTMDiscrete(observation_space=total_num_features, action_space=3, num_lstm_layers=1).to(device)
+    #q_net = ALSTMDiscrete(observation_space=total_num_features, action_space=3, n_layers=2).to(device)
+    scores, actions = deep_recurrent_q_network(q_net, te, batch_size=50, alpha=1e-4)
     #"""
 
     ### DDPG

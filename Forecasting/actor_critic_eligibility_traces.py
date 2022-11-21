@@ -8,6 +8,8 @@ def update_eligibiltiy_trace(eligibility_traces: list, net: torch.nn.Module, lam
     """ Compute eligibility traces for neural net """
     net.zero_grad()
     loss.backward(retain_graph=retain_graph)
+    #Pay attention to possible exploding gradient for certain hyperparameters
+    #torch.nn.utils.clip_grad_norm_(net.parameters(), 1) 
     if not eligibility_traces:
         with torch.no_grad():
             for p in net.parameters():
@@ -33,7 +35,8 @@ def get_state_vals(critic_net: torch.nn.Module, state: np.ndarray, new_state: np
     state_val = critic_net(state_tensor)
 
     new_state_tensor = torch.from_numpy(new_state).float().unsqueeze(0).to(device) 
-    new_state_val = critic_net(new_state_tensor)
+    with torch.no_grad():
+        new_state_val = critic_net(new_state_tensor)
 
     return state_val, new_state_val
 
@@ -57,6 +60,13 @@ def actor_critic(actor_net, critic_net, env, lambda_actor=1e-1, lambda_critic=1e
     reward_history = []
     action_history = []
     
+    if not train:
+        actor_net.eval()
+        critic_net.eval()
+    else:
+        actor_net.train()
+        critic_net.train()
+
     for n in range(num_episodes):
         rewards = []
         actions = []

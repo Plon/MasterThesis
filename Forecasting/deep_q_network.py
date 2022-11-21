@@ -11,26 +11,9 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from deep_deterministic_policy_gradient import soft_updates
 #criterion = torch.nn.SmoothL1Loss()
 criterion = torch.nn.MSELoss()
-nn_activation_function = nn.LeakyReLU()
 
 
-class DQN(nn.Module):
-    def __init__(self, observation_space=8, hidden_size=128, action_space=3, window_size=1) -> None:
-        super(DQN, self).__init__() 
-        self.conv_layer = nn.Conv1d(observation_space, hidden_size, kernel_size=window_size)
-        self.output_layer = nn.Linear(hidden_size, action_space)
-
-    def forward(self,x):
-        x = x.unsqueeze(-1)
-        x = self.conv_layer(x)
-        x = nn_activation_function(x)
-        x = x.squeeze().unsqueeze(0)
-        x = self.output_layer(x)
-        if len(x.shape) == 3: #Batch 
-            x = x.squeeze()
-        return x
-
-
+#TODO improve random exploration
 def act(model, state, epsilon=0) -> int:
     state = torch.from_numpy(state).float().unsqueeze(0).to(device)
     action_vals = model(state).cpu().detach()
@@ -43,6 +26,7 @@ def act(model, state, epsilon=0) -> int:
 
 def compute_loss_dqn(batch: tuple[torch.Tensor], net: torch.nn.Module, target_net: torch.nn.Module) -> torch.Tensor: 
     state_batch, action_batch, reward_batch, next_state_batch = batch
+    reward_batch = (reward_batch - reward_batch.mean()) / (reward_batch.std() + float(np.finfo(np.float32).eps))
     with torch.no_grad():
         target_state_vals = target_net(next_state_batch).max(1).values
     state_action_vals = net(state_batch)[range(action_batch.size(0)), (action_batch.long()+1)] 
@@ -57,6 +41,7 @@ def compute_loss_dqn(batch: tuple[torch.Tensor], net: torch.nn.Module, target_ne
 
 def compute_loss_double_dqn(batch: tuple[torch.Tensor], net: torch.nn.Module, target_net: torch.nn.Module) -> torch.Tensor: 
     state_batch, action_batch, reward_batch, next_state_batch = batch
+    reward_batch = (reward_batch - reward_batch.mean()) / (reward_batch.std() + float(np.finfo(np.float32).eps))
     with torch.no_grad():
         target_actions = net(next_state_batch).argmax(dim=1)
         target_state_vals = target_net(next_state_batch)[range(next_state_batch.size(0)), target_actions]
@@ -76,7 +61,7 @@ def update(replay_buffer: ReplayMemory, batch_size: int, net: torch.nn.Module, t
     optimizer.step()
 
 
-def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_rate=1e-1, batch_size=10, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, double_dqn = False, train=True, print_res=True, print_freq=100) -> tuple[np.ndarray, np.ndarray]: 
+def deep_q_network(q_net, env, alpha=1e-4, weight_decay=1e-5, target_learning_rate=1e-1, batch_size=10, exploration_rate=0.1, exploration_decay=(1-1e-2), exploration_min=0, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, double_dqn = False, train=True, print_res=True, print_freq=100) -> tuple[np.ndarray, np.ndarray]: 
     """
     Training for DQN
 
@@ -96,6 +81,7 @@ def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_ra
         actions (numpy.ndarray): the actions chosen by the agent        
     """
     target_net = deepcopy(q_net)
+    target_net.eval()
     optimizer = optim.Adam(q_net.parameters(), lr=alpha, weight_decay=weight_decay)
     replay_buffer = ReplayMemory(1000) # what capacity makes sense?
     reward_history = []
@@ -105,8 +91,13 @@ def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_ra
         loss_fn = compute_loss_double_dqn
     else: 
         loss_fn = compute_loss_dqn
+    
     if not train:
         exploration_rate = exploration_min
+        q_net.eval()
+    else:
+        q_net.train()
+    
     
     for n in range(num_episodes):
         rewards = []
@@ -119,7 +110,8 @@ def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_ra
 
             if done:
                 if train:
-                    update(replay_buffer, max(2, (i%batch_size)), q_net, target_net, optimizer, loss_fn)
+                    update(replay_buffer, min((i+1), batch_size), q_net, target_net, optimizer, loss_fn)
+                    soft_updates(q_net, target_net, target_learning_rate)
                 break
 
             actions.append(action)
@@ -129,10 +121,10 @@ def deep_q_network(q_net, env, alpha=1e-5, weight_decay=1e-5, target_learning_ra
                             torch.FloatTensor([reward]), 
                             torch.from_numpy(next_state).float().unsqueeze(0).to(device))
 
-            if train and i % batch_size == 0:
+            if train and i >= batch_size:#(i+1) % batch_size == 0:
                 update(replay_buffer, batch_size, q_net, target_net, optimizer, loss_fn)
-                soft_updates(q_net, target_net, target_learning_rate)
-            
+
+            soft_updates(q_net, target_net, target_learning_rate)            
             state = next_state
             exploration_rate = max(exploration_rate*exploration_decay, exploration_min)
         

@@ -15,6 +15,11 @@ def reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=1
     reward_history = []
     action_history = []
 
+    if not train:
+        policy_network.eval()
+    else:
+        policy_network.train()
+
     for n in range(num_episodes):
         state = env.reset() #S_0
         rewards = [] 

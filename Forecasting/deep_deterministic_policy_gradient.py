@@ -96,6 +96,7 @@ def compute_actor_loss(mu, q, s) -> torch.Tensor:
 def compute_critic_loss(actor_target, critic, critic_target, batch) -> torch.Tensor: 
     """ Returns Q loss Q(s_t, a) - (R_t+1 + Q'(s_t+1, mu'(s_t+1))) """
     state, action, reward, next_state = batch
+    reward = (reward - reward.mean()) / (reward.std() + float(np.finfo(np.float32).eps))
     with torch.no_grad():
         a_hat = actor_target(next_state)
         q_sa_hat = critic_target(next_state, a_hat).squeeze()
@@ -135,7 +136,12 @@ def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e
 
     if not train:
         exploration_rate = exploration_min
-    
+        actor_net.eval()
+        critic_net.eval()
+    else:
+        actor_net.train()
+        critic_net.train()
+        
     for n in range(num_episodes):
         rewards = []
         actions = []
