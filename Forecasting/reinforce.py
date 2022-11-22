@@ -10,6 +10,14 @@ def optimize(optimizer, loss) -> None:
     optimizer.step()
 
 
+def get_policy_loss(rewards: list, log_probs: list) -> torch.Tensor:
+    r = torch.FloatTensor(rewards)
+    r = (r - r.mean()) / (r.std() + float(np.finfo(np.float32).eps))
+    log_probs = torch.stack(log_probs).squeeze()
+    policy_loss = torch.mul(log_probs, r).mul(-1).sum()
+    return policy_loss
+
+
 def reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100) -> tuple[np.ndarray, np.ndarray]: 
     optimizer = optim.Adam(policy_network.parameters(), lr=alpha, weight_decay=weight_decay)
     reward_history = []
@@ -38,10 +46,7 @@ def reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=1
             log_probs.append(log_prob)
 
         if train:
-            r = torch.FloatTensor(rewards)
-            r = (r - r.mean()) / (r.std() + float(np.finfo(np.float32).eps))
-            log_probs = torch.stack(log_probs).squeeze()
-            policy_loss = torch.mul(log_probs, r).mul(-1).sum()
+            policy_loss = get_policy_loss(rewards, log_probs)
             optimize(optimizer, policy_loss)
 
         if print_res:

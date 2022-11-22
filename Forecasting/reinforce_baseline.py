@@ -7,6 +7,15 @@ from reinforce import optimize
 criterion = torch.nn.MSELoss()
 
 
+def get_policy_and_value_loss(value_function, state_batch, reward_batch, log_probs) -> tuple[torch.Tensor, torch.Tensor]:
+    state_value = value_function(state_batch).squeeze()
+    reward_batch = (reward_batch - reward_batch.mean()) / (reward_batch.std() + float(np.finfo(np.float32).eps)) #does it matter? check vf loss
+    delta = reward_batch - state_value.detach()
+    policy_loss = (-log_probs * delta).mean() 
+    vf_loss = criterion(state_value, reward_batch)
+    return policy_loss, vf_loss
+
+
 def reinforce_baseline(policy_network, value_function, env, alpha_policy=1e-3, alpha_vf=1e-5, weight_decay=1e-5, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100) -> tuple[np.ndarray, np.ndarray]: 
     optimizer_policy = optim.Adam(policy_network.parameters(), lr=alpha_policy, weight_decay=weight_decay)
     optimizer_vf = optim.Adam(value_function.parameters(), lr=alpha_vf, weight_decay=weight_decay)
@@ -40,17 +49,11 @@ def reinforce_baseline(policy_network, value_function, env, alpha_policy=1e-3, a
             states.append(torch.from_numpy(state).float().unsqueeze(0).to(device))
 
         if train:
-            r = torch.FloatTensor(rewards)
-            #r = (r - r.mean()) / (r.std() + float(np.finfo(np.float32).eps))
-            state_value = value_function(torch.cat(states)).squeeze()
-            adv = r - state_value.detach()
-            adv = (adv - adv.mean()) / (adv.std() + float(np.finfo(np.float32).eps))
-
+            reward_batch = torch.FloatTensor(rewards)
+            state_batch = torch.cat(states)
             log_probs = torch.stack(log_probs).squeeze()
-            policy_loss = torch.mul(log_probs, adv).mul(-1).sum()
+            policy_loss, vf_loss = get_policy_and_value_loss(value_function, state_batch, reward_batch, log_probs)
             optimize(optimizer_policy, policy_loss)
-
-            vf_loss = criterion(state_value, r)
             optimize(optimizer_vf, vf_loss)
 
         if print_res:

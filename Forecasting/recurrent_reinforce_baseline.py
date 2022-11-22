@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch.distributions import Normal, Categorical
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from reinforce import optimize
+from reinforce_baseline import get_policy_and_value_loss
 criterion = torch.nn.MSELoss()
 
 
@@ -44,17 +45,11 @@ def recurrent_reinforce_baseline(policy_network, value_function, env, alpha_poli
             states.append(torch.from_numpy(state).float().unsqueeze(0).to(device))
 
         if train:
-            r = torch.FloatTensor(rewards)
-            #r = (r - r.mean()) / (r.std() + float(np.finfo(np.float32).eps))
-            state_value = value_function(torch.cat(states)).squeeze()
-            adv = r - state_value.detach()            
-            adv = (adv - adv.mean()) / (adv.std() + float(np.finfo(np.float32).eps))
-
+            reward_batch = torch.FloatTensor(rewards)
+            state_batch = torch.cat(states)
             log_probs = torch.stack(log_probs).squeeze()
-            policy_loss = torch.mul(log_probs, adv).mul(-1).sum()
+            policy_loss, vf_loss = get_policy_and_value_loss(value_function, state_batch, reward_batch, log_probs)
             optimize(optimizer_policy, policy_loss)
-
-            vf_loss = criterion(state_value, r)
             optimize(optimizer_vf, vf_loss)
         
         if print_res:

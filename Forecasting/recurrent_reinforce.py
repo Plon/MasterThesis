@@ -2,11 +2,8 @@ import numpy as np
 import torch
 torch.manual_seed(0)
 import torch.optim as optim
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.distributions import Normal, Categorical
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-from reinforce import optimize
+from reinforce import optimize, get_policy_loss
 
 
 def recurrent_reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100) -> tuple[np.ndarray, np.ndarray]: 
@@ -38,10 +35,7 @@ def recurrent_reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_
             log_probs.append(log_prob)
 
         if train:
-            r = torch.FloatTensor(rewards)
-            r = (r - r.mean()) / (r.std() + float(np.finfo(np.float32).eps))
-            log_probs = torch.stack(log_probs).squeeze()
-            policy_loss = torch.mul(log_probs, r).mul(-1).sum()
+            policy_loss = get_policy_loss(rewards, log_probs)
             optimize(optimizer, policy_loss)
         
         if print_res:
