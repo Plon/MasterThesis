@@ -128,12 +128,12 @@ if __name__ == '__main__':
     sys.path.append('/Users/jonashanetho/Desktop/Masteroppgave/MasterThesis/Bars/')
     from bars import Imbalance_Bars, Bars
     import yfinance as yf
-    from networks import AConvContinuous, AConvDiscrete, AConvLSTMContinuous, AConvLSTMDiscrete, AFFContinuous, FFDiscrete, ALSTMContinuous, ALSTMDiscrete
+    from networks import AConvContinuous, AConvDiscrete, AConvLSTMContinuous, AConvLSTMDiscrete, AFFContinuous, FFDiscrete, ALSTMContinuous, ALSTMDiscrete, CConvSA, CFFSA
     from reinforce import reinforce
     from actor_critic_eligibility_traces import actor_critic
     from deep_q_network import deep_q_network
     from deep_recurrent_q_network import deep_recurrent_q_network
-    from deep_deterministic_policy_gradient import deep_determinstic_policy_gradient, DDPG_Actor, DDPG_Critic
+    from deep_deterministic_policy_gradient import deep_determinstic_policy_gradient
     from advantage_actor_critic import advantage_actor_critic
     from reinforce_baseline import reinforce_baseline
     from recurrent_reinforce import recurrent_reinforce
@@ -192,7 +192,7 @@ if __name__ == '__main__':
     #"""
 
     ### Recurrent REINFORCE with baseline LSTM Discrete & Continuous Action Space
-    #"""
+    """
     policy = ALSTMDiscrete(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
     #policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
     value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
@@ -249,34 +249,37 @@ if __name__ == '__main__':
     #"""
 
     ### ACTOR-CRITIC CONTINUOUS ACTION SPACE with batched learning
-    #TODO doesnt work well - something with the batch learning that goes wrong
+    #TODO doesnt work well - value function makes no sense in this context for continuous action space. use action-value instead
     """
-    actor = ALSTMContinuous(observation_space=total_num_features, n_layers=2).to(device)
-    #actor = AConvLSTMContinuous(observation_space=total_num_features, num_lstm_layers=2).to(device)
+    #actor = ALSTMContinuous(observation_space=total_num_features, n_layers=2).to(device)
+    actor = AConvLSTMContinuous(observation_space=total_num_features, num_lstm_layers=2).to(device)
     critic = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
-    scores, actions = advantage_actor_critic(actor, critic, te, alpha_actor=1e-3, alpha_critic=1e-5, batch_size=64, discrete=False, num_episodes=300)
+    scores, actions = advantage_actor_critic(actor, critic, te, alpha_actor=1e-1, alpha_critic=1e-1, batch_size=10, discrete=False, num_episodes=101)
     #"""
 
     ### DQN 
     """
     #q_net = FFDiscrete(observation_space=total_num_features, action_space=3).to(device)
     q_net = AConvDiscrete(observation_space=total_num_features, action_space=3).to(device)
-    scores, actions = deep_q_network(q_net, te, batch_size=50, alpha=1e-4, num_episodes=500)
+    scores, actions = deep_q_network(q_net, te, batch_size=64, alpha=1e-4, num_episodes=501)
     #"""
     
     ### DRQN 
     """
-    q_net = AConvLSTMDiscrete(observation_space=total_num_features, action_space=3, num_lstm_layers=1).to(device)
-    #q_net = ALSTMDiscrete(observation_space=total_num_features, action_space=3, n_layers=2).to(device)
-    scores, actions = deep_recurrent_q_network(q_net, te, batch_size=50, alpha=1e-3)
+    #q_net = AConvLSTMDiscrete(observation_space=total_num_features, action_space=3, num_lstm_layers=1).to(device)
+    q_net = ALSTMDiscrete(observation_space=total_num_features, action_space=3, n_layers=2).to(device)
+    scores, actions = deep_recurrent_q_network(q_net, te, batch_size=64, alpha=1e-3, num_episodes=201, print_freq=1)
     #"""
 
     ### DDPG
-    # TODO Doesnt work, converges to one action for every state
     """
-    actor = DDPG_Actor(observation_space=total_num_features).to(device)
-    critic = DDPG_Critic(observation_space=total_num_features).to(device)
-    scores, actions = deep_determinstic_policy_gradient(actor, critic, te, batch_size=10, alpha_critic=1e-6, alpha_actor=1e-1)
+    #actor = AConvLSTMDiscrete(observation_space=total_num_features, action_space=1).to(device)
+    actor = ALSTMDiscrete(observation_space=total_num_features, action_space=1, n_layers=2).to(device)
+    #actor = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
+    #actor = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
+    #critic = CConvSA(observation_space=total_num_features).to(device)
+    critic = CFFSA(observation_space=total_num_features).to(device)
+    scores, actions = deep_determinstic_policy_gradient(actor, critic, te, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, print_freq=1)
     #"""
 
     ### PLOTS

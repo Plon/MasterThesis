@@ -7,9 +7,18 @@ import torch.nn.functional as F
 from torch.distributions import Categorical, Normal
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from batch_learning import ReplayMemory, Transition, get_batch
-from deep_deterministic_policy_gradient import soft_updates
 from reinforce import optimize
 criterion = torch.nn.MSELoss()
+
+
+def soft_updates(net, target_net, tau):
+    """ Ø' <- tØ' + (1-t)Ø """
+    if tau > 1 or tau < 0:
+        raise ValueError("Argument tau must be number on the interval [0,1]")
+    with torch.no_grad():
+        for p, p_targ in zip(net.parameters(), target_net.parameters()):
+            p_targ.data.mul_(tau)
+            p_targ.data.add_((1 - tau) * p.data)
 
 
 def update(replay_buffer: ReplayMemory, batch_size: int, actor: torch.nn.Module, critic: torch.nn.Module, critic_target: torch.nn.Module, optimizer_actor: torch.optim, optimizer_critic: torch.optim, discrete=True) -> None: 
@@ -23,14 +32,7 @@ def update(replay_buffer: ReplayMemory, batch_size: int, actor: torch.nn.Module,
     log_probs = get_log_probs(actor, state_batch, action_batch, discrete)
     actor_loss, critic_loss = get_actor_and_critic_loss(critic, critic_target, state_batch, reward_batch, next_state_batch, log_probs)
 
-    #advantage = get_advantage(critic, critic_target, state_batch, reward_batch, next_state_batch)
-    #advantage = (advantage - advantage.mean()) / (advantage.std() + float(np.finfo(np.float32).eps))
-
-    #critic_loss = advantage.pow(2).mean()
     optimize(optimizer_critic, critic_loss)
-
-    #log_probs = get_log_probs(actor, state_batch, action_batch, discrete)
-    #actor_loss = (-log_probs * advantage.detach()).mean()
     optimize(optimizer_actor, actor_loss)
 
 
@@ -39,13 +41,21 @@ def get_actor_and_critic_loss(critic, critic_target, state_batch, reward_batch, 
     with torch.no_grad():
         #next_state_val = critic(next_state_batch).squeeze()
         next_state_val = critic_target(next_state_batch).squeeze()
-    advantage = reward_batch + next_state_val - state_val
-
-    actor_loss = (-log_probs * advantage.detach()).mean() 
-
-    #print(reward_batch, next_state_val, state_val)
-    critic_loss = criterion((reward_batch+next_state_val), state_val)
-    #print(actor_loss, critic_loss)
+    
+    #td_target = reward_batch + next_state_val
+    #advantage = td_target - state_val
+    advantage = state_val - reward_batch
+    td_target = reward_batch
+    #advantage = (advantage - advantage.mean()) / (advantage.std() + float(np.finfo(np.float32).eps))
+    #td_target = (td_target - td_target.mean()) / (td_target.std() + float(np.finfo(np.float32).eps))
+    #state_val = (state_val - state_val.mean()) / (state_val.std() + float(np.finfo(np.float32).eps))
+    #next_state_val = (next_state_val - next_state_val.mean()) / (next_state_val.std() + float(np.finfo(np.float32).eps))
+    
+    actor_loss = (-log_probs * advantage.detach()).mean()
+    critic_loss = criterion(td_target, state_val)
+    critic_loss = criterion(td_target, state_val)
+    #print(reward_batch, "\n", next_state_val, "\n", state_val, "\n", advantage, "\n",log_probs, "\n", actor_loss, "\n", critic_loss, "\n", "-"*20)
+    print(reward_batch, "\n", next_state_val, "\n", state_val, "\n", advantage, "\n", actor_loss, "\n", critic_loss, "\n", "-"*20)
     return actor_loss, critic_loss
 
 
@@ -68,15 +78,17 @@ def get_log_probs(actor, state, action, discrete=True) -> torch.Tensor:
         mean = torch.clamp(mean, -1, 1) + 1. ##need to do this since the discrete outputs {0, 1, 2}
         std += 1e-8
         dist = Normal(mean, std)
-        #print("Action:", action)
-        #print("mean:", mean)
-        #print("std:", std)
-        #print("-"*20, "\n")
+        """
+        print("Action:", action)
+        print("mean:", mean)
+        print("std:", std)
+        print("-"*20, "\n")
+        #"""
     log_probs = dist.log_prob(action)
     return log_probs
 
 
-def advantage_actor_critic(actor_net, critic_net, env, alpha_actor=1e-1, alpha_critic=1e-3, weight_decay=1e-6, target_critic_net_learning_rate=0.5, batch_size=10, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, discrete=True) -> tuple[np.ndarray, np.ndarray]: 
+def advantage_actor_critic(actor_net, critic_net, env, alpha_actor=1e-1, alpha_critic=1e-3, weight_decay=1e-6, target_critic_net_learning_rate=0.1, batch_size=10, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, discrete=True) -> tuple[np.ndarray, np.ndarray]: 
     """ Trains the actor-critic with eligibility traces in the continuing undiscounted setting """
     critic_target_net = deepcopy(critic_net) #not used, works better without
     critic_target_net.eval()
@@ -116,8 +128,18 @@ def advantage_actor_critic(actor_net, critic_net, env, alpha_actor=1e-1, alpha_c
                             torch.FloatTensor([reward]), 
                             torch.from_numpy(next_state).float().unsqueeze(0).to(device))
 
-            if train and len(replay_buffer) >= batch_size and (i+1) % min(max(int(batch_size/10), 2), max_episode_length) == 0:
+            if train and len(replay_buffer) >= batch_size:# and (i+1) % min(max(int(batch_size/10), 2), max_episode_length) == 0:
                 update(replay_buffer, batch_size, actor_net, critic_net, critic_target_net, optimizer_actor, optimizer_critic, discrete)
+                """
+                state_batch = torch.from_numpy(state).float().unsqueeze(0).to(device)
+                action_batch = torch.FloatTensor([action]) + 1
+                reward_batch = torch.FloatTensor([reward]).squeeze()
+                next_state_batch = torch.from_numpy(next_state).float().unsqueeze(0).to(device)
+                log_probs = get_log_probs(actor_net, state_batch, action_batch, discrete)
+                actor_loss, critic_loss = get_actor_and_critic_loss(critic_net, critic_target_net, state_batch, reward_batch, next_state_batch, log_probs)                
+                optimize(optimizer_critic, critic_loss)
+                optimize(optimizer_actor, actor_loss)
+                #"""
 
             soft_updates(critic_net, critic_target_net, target_critic_net_learning_rate) ### not used
             state = next_state

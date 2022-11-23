@@ -2,9 +2,6 @@ import numpy as np
 import torch
 torch.manual_seed(0)
 import torch.optim as optim
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.distributions import Normal, Categorical
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from reinforce import optimize
 from reinforce_baseline import get_policy_and_value_loss
