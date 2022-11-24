@@ -9,8 +9,8 @@ criterion = torch.nn.MSELoss()
 
 def get_policy_and_value_loss(value_function, state_batch, reward_batch, log_probs) -> tuple[torch.Tensor, torch.Tensor]:
     state_value = value_function(state_batch).squeeze()
-    #reward_batch = (reward_batch - reward_batch.mean()) / (reward_batch.std() + float(np.finfo(np.float32).eps)) # not sure if we should normalize rewards here...
     delta = reward_batch - state_value.detach()
+    delta = (delta - delta.mean()) / (delta.std() + float(np.finfo(np.float32).eps))
     policy_loss = (-log_probs * delta).mean() 
     vf_loss = criterion(state_value, reward_batch)
     return policy_loss, vf_loss
