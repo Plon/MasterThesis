@@ -130,11 +130,9 @@ if __name__ == '__main__':
     import yfinance as yf
     from networks import AConvContinuous, AConvDiscrete, AConvLSTMContinuous, AConvLSTMDiscrete, AFFContinuous, FFDiscrete, ALSTMContinuous, ALSTMDiscrete, CConvSA, CFFSA
     from reinforce import reinforce
-    from actor_critic_eligibility_traces import actor_critic
     from deep_q_network import deep_q_network
     from deep_recurrent_q_network import deep_recurrent_q_network
     from deep_deterministic_policy_gradient import deep_determinstic_policy_gradient
-    from advantage_actor_critic import advantage_actor_critic
     from reinforce_baseline import reinforce_baseline
     from recurrent_reinforce import recurrent_reinforce
     from recurrent_reinforce_baseline import recurrent_reinforce_baseline
@@ -163,11 +161,10 @@ if __name__ == '__main__':
     #"""
 
     ### REINFORCE feedwordward with baseline
-    """
+    #"""
     policy = FFDiscrete(observation_space=total_num_features).to(device)
     value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
-    #scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-3, alpha_vf=1e-5)
-    scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-3, alpha_vf=1e-6)
+    scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-3, alpha_vf=1e-5)
     #"""
 
     ### REINFORCE feedwordard CONTINUOUS ACTION SPACE
@@ -188,7 +185,8 @@ if __name__ == '__main__':
     """
     policy = ALSTMDiscrete(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
     #policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
-    scores, actions = recurrent_reinforce(policy, te, alpha=1e-4)
+    scores, actions = reinforce(policy, te, alpha=1e-4, recurrent=True)
+    #scores, actions = recurrent_reinforce(policy, te, alpha=1e-4)
     #"""
 
     ### Recurrent REINFORCE with baseline LSTM Discrete & Continuous Action Space
@@ -196,7 +194,8 @@ if __name__ == '__main__':
     policy = ALSTMDiscrete(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
     #policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
     value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
-    scores, actions = recurrent_reinforce_baseline(policy, value_function, te, alpha_policy=1e-4, alpha_vf=1e-5)
+    #scores, actions = recurrent_reinforce_baseline(policy, value_function, te, alpha_policy=1e-4, alpha_vf=1e-5)
+    scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-4, alpha_vf=1e-5, recurrent=True)
     #"""
 
     ### REINFORCE Conv
@@ -259,8 +258,8 @@ if __name__ == '__main__':
 
     ### DQN 
     """
-    #q_net = FFDiscrete(observation_space=total_num_features, action_space=3).to(device)
-    q_net = AConvDiscrete(observation_space=total_num_features, action_space=3).to(device)
+    q_net = FFDiscrete(observation_space=total_num_features, action_space=3).to(device)
+    #q_net = AConvDiscrete(observation_space=total_num_features, action_space=3).to(device)
     scores, actions = deep_q_network(q_net, te, batch_size=64, alpha=1e-4, num_episodes=501)
     #"""
     
@@ -268,7 +267,8 @@ if __name__ == '__main__':
     """
     #q_net = AConvLSTMDiscrete(observation_space=total_num_features, action_space=3, num_lstm_layers=1).to(device)
     q_net = ALSTMDiscrete(observation_space=total_num_features, action_space=3, n_layers=2).to(device)
-    scores, actions = deep_recurrent_q_network(q_net, te, batch_size=64, alpha=1e-3, num_episodes=201, print_freq=1)
+    scores, actions = deep_q_network(q_net, te, batch_size=64, alpha=1e-4, num_episodes=501, recurrent=True)
+    #scores, actions = deep_recurrent_q_network(q_net, te, batch_size=64, alpha=1e-3, num_episodes=201, print_freq=1)
     #"""
 
     ### DDPG
@@ -279,7 +279,7 @@ if __name__ == '__main__':
     #actor = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
     #critic = CConvSA(observation_space=total_num_features).to(device)
     critic = CFFSA(observation_space=total_num_features).to(device)
-    scores, actions = deep_determinstic_policy_gradient(actor, critic, te, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, print_freq=1)
+    scores, actions = deep_determinstic_policy_gradient(actor, critic, te, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, recurrent=True)
     #"""
 
     ### PLOTS

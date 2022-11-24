@@ -9,14 +9,14 @@ criterion = torch.nn.MSELoss()
 
 def get_policy_and_value_loss(value_function, state_batch, reward_batch, log_probs) -> tuple[torch.Tensor, torch.Tensor]:
     state_value = value_function(state_batch).squeeze()
-    reward_batch = (reward_batch - reward_batch.mean()) / (reward_batch.std() + float(np.finfo(np.float32).eps)) #does it matter? check vf loss
+    #reward_batch = (reward_batch - reward_batch.mean()) / (reward_batch.std() + float(np.finfo(np.float32).eps)) # not sure if we should normalize rewards here...
     delta = reward_batch - state_value.detach()
     policy_loss = (-log_probs * delta).mean() 
     vf_loss = criterion(state_value, reward_batch)
     return policy_loss, vf_loss
 
 
-def reinforce_baseline(policy_network, value_function, env, alpha_policy=1e-3, alpha_vf=1e-5, weight_decay=1e-5, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100) -> tuple[np.ndarray, np.ndarray]: 
+def reinforce_baseline(policy_network, value_function, env, alpha_policy=1e-3, alpha_vf=1e-5, weight_decay=1e-5, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
     optimizer_policy = optim.Adam(policy_network.parameters(), lr=alpha_policy, weight_decay=weight_decay)
     optimizer_vf = optim.Adam(value_function.parameters(), lr=alpha_vf, weight_decay=weight_decay)
     reward_history = []
@@ -35,9 +35,13 @@ def reinforce_baseline(policy_network, value_function, env, alpha_policy=1e-3, a
         actions = [] 
         log_probs = []  
         states = []
+        hx = None
 
         for _ in range(max_episode_length):
-            action, log_prob = policy_network.act(state) #A_{t-1}
+            if recurrent: 
+                action, log_prob, hx = policy_network.act(state, hx) #A_{t-1}
+            else:
+                action, log_prob = policy_network.act(state) #A_{t-1}
             state, reward, done, _ = env.step(action) # S_t, R_t 
 
             if done:
