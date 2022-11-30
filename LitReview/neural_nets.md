@@ -347,3 +347,82 @@ Therefore, LSTMs handle long-term dependencies without the problem of exploding 
 
 
 
+
+
+
+
+
+### Network Architectures. 
+Vanilla feedforward neural nets do one-to-one processing, where the network maps a fixed-size input to a single output. 
+Recurrent neural nets open the door to different combinations of input and output data like one-to-many, many-to-one, and many-to-many processing. 
+One-to-many processing maps a single input of fixed size like an image or vector to a variable length sequence. 
+In many-to-one processing, the input is of variable lengths, like text or a video consisting of a sequence of frames, and the output is a single value. 
+Many-to-many processing uses both input and output of variable length, and this is used in time series forecasting where a sequence of input data is used to forecast a sequence of outputs. 
+This form of many-to-many processing requires the input and output sequences to be of equal length. 
+However, in tasks like machine translation, this is often not the case. 
+
+
+
+
+### Encoder-Decoder. 
+An encoder-decoder architecture can train RNNs to map input sequences to output sequences that are not necessarily the same length. 
+The architecture consists of an encoder and a decoder. 
+The input to a recurrent neural net is called the context $C$, which is a vector or a sequence of vectors that summarize the input sequence $X=(x^{(1)}, ..., x^{(n_x)})$. 
+The encoder processes the input sequence and emits the context $C$, usually as a simple function of its final hidden state. 
+The decoder is conditioned on that fixed-length vector to generate the output sequence $Y=(y^{(1)}, ..., y^{(n_y)})$. 
+Vanilla RNN architectures require $n_x = n_y$, but this is not the case for the encoder-decoder architecture. 
+The decoder RNN typically takes the last state $h_{n_x}$ of the encoder RNN as input as a representation of the input sequence $C$. 
+If $C$ is a vector, then the decoder RNN is a vector-to-sequence RNN. 
+The encoder and decoder do not need to have the same number of hidden layers. 
+In some cases, the dimension of the encoder's context output $C$ is too small to summarize a long sequence properly. 
+Attention mechanisms were introduced to address this limitation. 
+
+
+
+### Attention Mechanisms. 
+Attention mechanisms were introduced by researchers from Stanford University in 2015 \cite{luong2015effective} as an evolution of the classical encoder-decoder model. 
+The standard encoder-decoder architecture only passes the final hidden state of the encoder to the decoder. With attention, all hidden states from the encoder are passed as context to the decoder. 
+The decoder will thus be able to capture information about all hidden states, not just the last one. 
+To build the context vector every hidden state is assigned a score, or a level of importance, that depends on the context. 
+Then the softmax distribution is applied to these scores to generate a probability distribution over the hidden states. 
+The context vector is calculated as the weighted sum of all encoder hidden states and passed to the decoder. 
+The decoder is kept as it is in the standard encoder-decoder architecture. 
+The attention weighting is done using a function, e.g., a feedforward network, that is optimized using gradient-based methods. 
+
+
+
+
+
+## Transformers. 
+A problem with recurrent neural nets like LSTMs is that the sequential nature of the networks precludes parallelization during training. 
+Memory constraints might limit larger batches at longer sequence lengths. 
+The recurrent relationship between the hidden states is causing problems in this context. 
+Transformers were introduced in 2017 by researchers from Google Brain in a paper titled ``Attention Is All You Need" \cite{vaswani2017attention}. 
+The title refers to the fact that transformers only use attention mechanisms to draw global dependencies between input and output, and no recurrence. 
+Transformers can be used with parallelization and is generally quicker to train than recurrent neural nets. 
+
+
+### Architecture. 
+Like the RNN sequence-to-sequence architecture, the transformer architecture consists of an encoder stack and a decoder stack. 
+Initially, some form of preprocessing is applied to each part of the input depending on the type (text, video, time series). 
+For every word, frame, or observation in the input data, the relevant information must be extracted and embedded into a numerical vector representation that can be processed by the encoder and decoder. 
+A transformer does not process data sequentially and learns temporal dependencies naturally. 
+Therefore positional embeddings should be added to the new representation of the input. 
+
+
+#### Encoder. 
+The encoder layer generates encoding that contains information about which parts of the input are relevant to each other. 
+Attention vectors represent how relevant one part of the input is to the other parts. This captures the contextual relationship between the different parts of the input. 
+Several attention vectors are made for every word/frame/observation, and the weighted average over these attention vectors is used as the final attention vector. 
+Using multiple attention vectors like this is called multi-head attention. 
+A feedforward network is then applied to every final attention vector to transform the attention vectors to a format that is compatible with the next layer in the encoder or the decoder. 
+
+
+#### Decoder. 
+The decoder employs the same multi-head attention and feedforward blocks that the encoder. 
+However, one difference is the first block which is called the masked multi-head attention. 
+In this step, the words/frames/observations from the decoder input that appear later are masked so that they are hidden from the attention network. 
+Then, every attention vector is passed to a multi-head attention block together with the vectors from the encoder stack. 
+For every part of the input, this block generates an attention vector that defines its relationship with the other parts. 
+Then, a feedforward network is applied to every attention vector to transform them into a format that is compatible with the next layer. 
+The final two layers of the decoder are a linear layer that transforms the input's dimension and a softmax layer that transforms the input into a probability distribution. 
