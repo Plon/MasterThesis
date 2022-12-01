@@ -14,7 +14,7 @@ class TradeEnvironment():
         
         self.current_index = 0 
         self.timestamps = np.array(trades.index)
-        self.year_cycle, self.week_cycle, self.day_cycle = self.time_cycle()
+        self.year_pos_1, self.year_pos_2, self.week_pos_1, self.week_pos_2, self.day_pos_1, self.day_pos_2 = self.time_cycle()
 
         #Normalize prices
         self.prices = np.array(trades['Close']).reshape(-1, 1)
@@ -32,7 +32,7 @@ class TradeEnvironment():
     def reset(self) -> np.ndarray:
         """ Reset environment to start and return initial state """
         self.current_index = 0 
-        self.year_cycle, self.week_cycle, self.day_cycle = self.time_cycle()
+        self.year_pos_1, self.year_pos_2, self.week_pos_1, self.week_pos_2, self.day_pos_1, self.day_pos_2 = self.time_cycle()
         self.position = 0
         self.returns = [0 for _ in range(10)] 
         self.observations = np.array([self.newest_observation() for _ in range(len(self.observations))]) # State vector of previous n observations
@@ -41,10 +41,21 @@ class TradeEnvironment():
     def time_cycle(self) -> tuple[float, float, float]:
         """ Returns the current position in the year, week, day cycle """
         tstep = self.timestamps[self.current_index]
-        year_cycle = np.sin(2*np.pi / ((tstep.day_of_year+1)/366)) if tstep.is_leap_year else np.sin(2*np.pi / ((tstep.day_of_year+1)/365))
-        week_cycle = np.sin(2*np.pi / ((tstep.day_of_week+1)/7)) #TODO 5 or 7 trading days for commodities?
-        day_cycle = np.sin(2*np.pi / ((tstep.hour+1)/24))
-        return year_cycle, week_cycle, day_cycle
+        
+        year_position = 2*np.pi / ((tstep.day_of_year+1)/366) if tstep.is_leap_year else 2*np.pi / ((tstep.day_of_year+1)/365)
+        year_pos_1 = np.sin(year_position)
+        year_pos_2 = np.cos(year_position) 
+        
+        #TODO is it 5 or 7 trading days for commodities?
+        week_position = 2*np.pi / ((tstep.day_of_week+1)/7)
+        week_pos_1 = np.sin(week_position) 
+        week_pos_2 = np.cos(week_position) 
+
+        day_position = 2*np.pi / ((tstep.hour+1)/24)
+        day_pos_1 = np.sin(day_position)
+        day_pos_2 = np.cos(day_position)
+        
+        return year_pos_1, year_pos_2, week_pos_1, week_pos_2, day_pos_1, day_pos_2
 
     def state(self) -> np.ndarray:
         """ Returns the state vector in a flattened format """
@@ -68,9 +79,12 @@ class TradeEnvironment():
             self.returns[-1],
             np.average(self.returns[-3:]), 
             np.average(self.returns[-10:]),
-            self.year_cycle,
-            self.week_cycle,
-            self.day_cycle
+            self.year_pos_1, 
+            self.year_pos_2, 
+            self.week_pos_1, 
+            self.week_pos_2,
+            self.day_pos_1, 
+            self.day_pos_2
         ])
 
     def reward_function(self, action) -> float: 
@@ -91,15 +105,12 @@ class TradeEnvironment():
         self.current_index += 1 #take step
 
         #Check that action is legal. remove if we're doing pure regression forecasting 
-        #if we're doing regression the action should be the +/- (maybe log) price change and not the actual price
         #action = action - 1. # maybe better to do it here
         assert action <= 1. and action >= -1.
 
         #Check that there still is another possible step
         if self.current_index >= len(self.prices):
             return self.state(), 0, True, {}
-
-        #TODO check if the balance is still > 0
 
         #Reward function      
         reward = self.reward_function(action)  
@@ -112,7 +123,7 @@ class TradeEnvironment():
 
         self.current_price = self.prices[self.current_index]
         self.position = action
-        self.year_cycle, self.week_cycle, self.day_cycle = self.time_cycle()
+        self.year_pos_1, self.year_pos_2, self.week_pos_1, self.week_pos_2, self.day_pos_1, self.day_pos_2 = self.time_cycle()
 
         # FIFO state vector update
         self.observations = np.concatenate((self.observations[1:], [self.newest_observation()]), axis=0)
@@ -142,7 +153,7 @@ if __name__ == '__main__':
     bar_ids = Imbalance_Bars("volume").get_all_imbalance_ids(hist)
     hist_bar = hist.loc[bar_ids]
 
-    num_features = 8
+    num_features = 11
     num_prev_obs = 2
     total_num_features = num_features * num_prev_obs
 
@@ -232,7 +243,7 @@ if __name__ == '__main__':
     #"""
 
     ### DDPG
-    #"""
+    """
     #actor = AConvLSTMDiscrete(observation_space=total_num_features, action_space=1).to(device)
     #actor = ALSTMDiscrete(observation_space=total_num_features, action_space=1, n_layers=2).to(device)
     #actor = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
