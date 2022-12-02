@@ -1,61 +1,27 @@
 import numpy as np
-import torch
-torch.manual_seed(0)
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-from sklearn.preprocessing import MinMaxScaler
 
 
 class TradeEnvironment():
-    def __init__(self, trades, transaction_fraction=0.002, num_prev_observations=10) -> None:
+    def __init__(self, states, prices, transaction_fraction=0.002, num_prev_observations=10) -> None:
         self.transaction_fraction = float(transaction_fraction)
         num_prev_observations = int(num_prev_observations)
         if num_prev_observations < 1:
             raise ValueError("Argument num_prev_observations must be integer >= 1, and not {}".format(num_prev_observations))
         
+        self.states = states 
         self.current_index = 0 
-        self.timestamps = np.array(trades.index)
-        self.year_pos_1, self.year_pos_2, self.week_pos_1, self.week_pos_2, self.day_pos_1, self.day_pos_2 = self.time_cycle()
-
-        #Normalize prices
-        self.prices = np.array(trades['Close']).reshape(-1, 1)
-        #self.prices = MinMaxScaler().fit_transform(self.prices)
-        self.scaler = MinMaxScaler().fit(self.prices)
-        self.prices = self.scaler.transform(self.prices)
-        self.prices = self.prices.flatten()
-
-        self.current_price = self.prices[self.current_index]
-        self.position = 0 #start position is an empty portfolio
-        self.returns = [0 for _ in range(10)] 
-
+        self.position = 0 # initial empty portfolio
+        #self.prices = np.array(list(zip(*states))[0]) # assume prices are in the first collumn
+        self.prices = prices # need to have the non-normalized prices to correctly model transaction costs
+        self.current_price = self.prices[self.current_index] 
         self.observations = np.array([self.newest_observation() for _ in range(num_prev_observations)]) # State vector of previous n observations
 
     def reset(self) -> np.ndarray:
         """ Reset environment to start and return initial state """
         self.current_index = 0 
-        self.year_pos_1, self.year_pos_2, self.week_pos_1, self.week_pos_2, self.day_pos_1, self.day_pos_2 = self.time_cycle()
         self.position = 0
-        self.returns = [0 for _ in range(10)] 
-        self.observations = np.array([self.newest_observation() for _ in range(len(self.observations))]) # State vector of previous n observations
-        return self.observations.flatten()
-
-    def time_cycle(self) -> tuple[float, float, float]:
-        """ Returns the current position in the year, week, day cycle """
-        tstep = self.timestamps[self.current_index]
-        
-        year_position = 2*np.pi / ((tstep.day_of_year+1)/366) if tstep.is_leap_year else 2*np.pi / ((tstep.day_of_year+1)/365)
-        year_pos_1 = np.sin(year_position)
-        year_pos_2 = np.cos(year_position) 
-        
-        #TODO is it 5 or 7 trading days for commodities?
-        week_position = 2*np.pi / ((tstep.day_of_week+1)/7)
-        week_pos_1 = np.sin(week_position) 
-        week_pos_2 = np.cos(week_position) 
-
-        day_position = 2*np.pi / ((tstep.hour+1)/24)
-        day_pos_1 = np.sin(day_position)
-        day_pos_2 = np.cos(day_position)
-        
-        return year_pos_1, year_pos_2, week_pos_1, week_pos_2, day_pos_1, day_pos_2
+        self.observations = np.array([self.newest_observation() for _ in range(len(self.observations))]) 
+        return self.state()
 
     def state(self) -> np.ndarray:
         """ Returns the state vector in a flattened format """
@@ -64,32 +30,14 @@ class TradeEnvironment():
     def newest_observation(self) -> np.ndarray:
         """
         Returns:
-            price
-            position
-            return from previous bar
-            average return past 3 bars
-            average return past 10 bars
-            year cycle
-            week cycle
-            day cycle
+            state + current position
         """
-        return np.array([
-            self.current_price, 
-            self.position, 
-            self.returns[-1],
-            np.average(self.returns[-3:]), 
-            np.average(self.returns[-10:]),
-            self.year_pos_1, 
-            self.year_pos_2, 
-            self.week_pos_1, 
-            self.week_pos_2,
-            self.day_pos_1, 
-            self.day_pos_2
-        ])
+        return np.insert(self.states[self.current_index], len(self.states[self.current_index]), self.position)
 
     def reward_function(self, action) -> float: 
-        """ R_t = A_{t-1} * (p_t - p_{t-1}) - p_{t-1} * c * |A_{t-1} - A_{t-2}| """  
-        #return torch.nn.MSELoss()(action, self.prices[self.current_index]) #for regression
+        """ R_t = A_{t-1} * (p_t - p_{t-1}) - p_{t-1} * c * |A_{t-1} - A_{t-2}| """ 
+        #TODO how to calculate transaction costs with normalized prices
+        return (action * (self.states[self.current_index][0] - self.states[self.current_index-1][0])) - (self.states[self.current_index-1][0] * self.transaction_fraction * abs(action - self.position))
         return (action * (self.prices[self.current_index] - self.current_price)) - (self.current_price * self.transaction_fraction * abs(action - self.position))
 
     def step(self, action) -> tuple[np.ndarray, float, bool, dict]:
@@ -103,175 +51,11 @@ class TradeEnvironment():
             info
         """
         self.current_index += 1 #take step
-
-        #Check that action is legal. remove if we're doing pure regression forecasting 
-        #action = action - 1. # maybe better to do it here
         assert action <= 1. and action >= -1.
-
-        #Check that there still is another possible step
-        if self.current_index >= len(self.prices):
-            return self.state(), 0, True, {}
-
-        #Reward function      
+        if self.current_index >= len(self.states): 
+            return self.state(), 0, True, {} # The end has been reached
         reward = self.reward_function(action)  
-
-        #Update state
-        #TODO prices can be zero. what to do then? same with negative prices can produce neg number in log
-        price_before = self.scaler.inverse_transform([[self.current_price]]).flatten()[0]
-        price_now = self.scaler.inverse_transform([[self.prices[self.current_index]]]).flatten()[0]
-        self.returns.append(np.log(price_now/price_before))
-
         self.current_price = self.prices[self.current_index]
         self.position = action
-        self.year_pos_1, self.year_pos_2, self.week_pos_1, self.week_pos_2, self.day_pos_1, self.day_pos_2 = self.time_cycle()
-
-        # FIFO state vector update
-        self.observations = np.concatenate((self.observations[1:], [self.newest_observation()]), axis=0)
-
+        self.observations = np.concatenate((self.observations[1:], [self.newest_observation()]), axis=0) # FIFO state vector update
         return self.state(), reward, False, {}
-
-
-
-
-
-if __name__ == '__main__':
-    import sys
-    sys.path.append('/Users/jonashanetho/Desktop/Masteroppgave/MasterThesis/Bars/')
-    from bars import Imbalance_Bars, Bars
-    import yfinance as yf
-    from networks import AConvContinuous, AConvDiscrete, AConvLSTMContinuous, AConvLSTMDiscrete, AFFContinuous, FFDiscrete, ALSTMContinuous, ALSTMDiscrete, CConvSA, CFFSA
-    from reinforce import reinforce
-    from deep_q_network import deep_q_network
-    from deep_deterministic_policy_gradient import deep_determinstic_policy_gradient
-    from reinforce_baseline import reinforce_baseline
-    import plotly.express as px
-    import matplotlib.pyplot as plt
-
-    symbol = "CL=F" #WTI crude futures
-    instr = yf.Ticker(symbol) 
-    hist = instr.history(period="30d", interval="30m")
-    bar_ids = Imbalance_Bars("volume").get_all_imbalance_ids(hist)
-    hist_bar = hist.loc[bar_ids]
-
-    num_features = 11
-    num_prev_obs = 2
-    total_num_features = num_features * num_prev_obs
-
-    col_scores = []
-    num_runs = 500
-
-    te = TradeEnvironment(hist_bar, num_prev_observations=num_prev_obs)
-
-    ### REINFORCE feedforward
-    """
-    policy = FFDiscrete(observation_space=total_num_features).to(device)
-    scores, actions = reinforce(policy, te, num_episodes=400)
-    #"""
-
-    ### REINFORCE feedwordward with baseline
-    """
-    policy = FFDiscrete(observation_space=total_num_features).to(device)
-    value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
-    scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-3, alpha_vf=1e-5)
-    #"""
-
-    ### REINFORCE feedwordard CONTINUOUS ACTION SPACE
-    """
-    policy = AFFContinuous(observation_space=total_num_features).to(device)
-    scores, actions = reinforce(policy, te, alpha=1e-4)
-    #"""
-
-    ### REINFORCE conv with baseline
-    """
-    policy = AConvDiscrete(observation_space=total_num_features).to(device)
-    value_function = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
-    #value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
-    scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-4, alpha_vf=1e-5)
-    #"""
-
-    ### Recurrent REINFORCE LSTM Discrete & Continuous Action Space
-    """
-    policy = ALSTMDiscrete(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
-    #policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
-    scores, actions = reinforce(policy, te, alpha=1e-4, recurrent=True)
-    #"""
-
-    ### Recurrent REINFORCE with baseline LSTM Discrete & Continuous Action Space
-    """
-    policy = ALSTMDiscrete(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
-    #policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
-    value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
-    scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-4, alpha_vf=1e-5, recurrent=True)
-    #"""
-
-    ### REINFORCE Conv
-    """
-    policy = AConvDiscrete(observation_space=total_num_features).to(device)
-    scores, actions = reinforce(policy, te)
-    #"""
-    
-    ### REINFORCE Conv Continuous Action Space
-    """
-    policy = AConvContinuous(observation_space=total_num_features).to(device)
-    scores, actions = reinforce(policy, te, alpha=1e-5)
-    #"""
-
-    ### Recurrent REINFORCE Conv LSTM 
-    """
-    policy = AConvLSTMDiscrete(observation_space=total_num_features, num_lstm_layers=2).to(device)
-    scores, actions = reinforce(policy, te, alpha=1e-4, recurrent=True)
-    #"""
-
-    ### Recurrent REINFORCE Conv LSTM Continuous Action Space
-    """
-    policy = AConvLSTMContinuous(observation_space=total_num_features, num_lstm_layers=2).to(device)
-    scores, actions = reinforce(policy, te, alpha=1e-4, recurrent=True)
-    #"""
-
-    ### DQN 
-    """
-    q_net = FFDiscrete(observation_space=total_num_features, action_space=3).to(device)
-    #q_net = AConvDiscrete(observation_space=total_num_features, action_space=3).to(device)
-    scores, actions = deep_q_network(q_net, te, batch_size=64, alpha=1e-4, num_episodes=501)
-    #"""
-    
-    ### DRQN 
-    """
-    #q_net = AConvLSTMDiscrete(observation_space=total_num_features, action_space=3, num_lstm_layers=1).to(device)
-    q_net = ALSTMDiscrete(observation_space=total_num_features, action_space=3, n_layers=2).to(device)
-    scores, actions = deep_q_network(q_net, te, batch_size=64, alpha=1e-4, num_episodes=501, recurrent=True)
-    #"""
-
-    ### DDPG
-    """
-    #actor = AConvLSTMDiscrete(observation_space=total_num_features, action_space=1).to(device)
-    #actor = ALSTMDiscrete(observation_space=total_num_features, action_space=1, n_layers=2).to(device)
-    #actor = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
-    actor = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
-    #critic = CConvSA(observation_space=total_num_features).to(device)
-    critic = CFFSA(observation_space=total_num_features).to(device)
-    scores, actions = deep_determinstic_policy_gradient(actor, critic, te, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, recurrent=False)
-    #"""
-
-    ### PLOTS
-    """
-    labels = ["R", "R_CA", "R_LSTM", "R_LSTM_CA", "R_Conv", "R_Conv_CA", "AC", "AC_CA"]
-    for s, l in zip(col_scores, labels):
-        plt.plot(s, label=l)
-    plt.xlabel("Run_nr")
-    plt.ylabel("{%} return")
-    plt.legend()
-    plt.show()
-    #"""
-    
-    #"""
-    #fig = px.line(x=np.linspace(1, len(scores), num=len(scores)), y=scores)    
-    #fig.show()
-
-    from scipy.signal import savgol_filter
-    fig = px.line(x=np.linspace(1, len(scores), num=len(scores)), y=savgol_filter(scores, 9, 2))
-    fig.show()
-
-    #fig = px.line(x=np.linspace(1, len(scores), num=len(scores)), y=np.cumsum(scores))
-    #fig.show()
-    #"""
