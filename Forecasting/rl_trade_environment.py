@@ -12,8 +12,7 @@ class TradeEnvironment():
         self.current_index = 0 
         self.position = 0 # initial empty portfolio
         #self.prices = np.array(list(zip(*states))[0]) # assume prices are in the first collumn
-        self.prices = prices # need to have the non-normalized prices to correctly model transaction costs
-        self.current_price = self.prices[self.current_index] 
+        self.prices = prices # need to have the non-normalized prices to correctly model transaction costs... However, the model perform better with normalized prices as rewards...
         self.observations = np.array([self.newest_observation() for _ in range(num_prev_observations)]) # State vector of previous n observations
 
     def reset(self) -> np.ndarray:
@@ -38,10 +37,12 @@ class TradeEnvironment():
         """ R_t = A_{t-1} * (p_t - p_{t-1}) - p_{t-1} * c * |A_{t-1} - A_{t-2}| """ 
         #TODO how to calculate transaction costs with normalized prices
         return (action * (self.states[self.current_index][0] - self.states[self.current_index-1][0])) - (self.states[self.current_index-1][0] * self.transaction_fraction * abs(action - self.position))
-        return (action * (self.prices[self.current_index] - self.current_price)) - (self.current_price * self.transaction_fraction * abs(action - self.position))
+        return (action * (self.prices[self.current_index] - self.prices[self.current_index-1])) - (self.prices[self.current_index-1] * self.transaction_fraction * abs(action - self.position))
 
     def step(self, action) -> tuple[np.ndarray, float, bool, dict]:
         """
+        Take step 
+
         Args:
             action
         Returns:
@@ -50,12 +51,11 @@ class TradeEnvironment():
             termination status
             info
         """
-        self.current_index += 1 #take step
+        self.current_index += 1 
         assert action <= 1. and action >= -1.
         if self.current_index >= len(self.states): 
             return self.state(), 0, True, {} # The end has been reached
         reward = self.reward_function(action)  
-        self.current_price = self.prices[self.current_index]
         self.position = action
         self.observations = np.concatenate((self.observations[1:], [self.newest_observation()]), axis=0) # FIFO state vector update
         return self.state(), reward, False, {}

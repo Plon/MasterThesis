@@ -39,6 +39,7 @@ def get_returns(prices: np.ndarray, lag=1) -> np.ndarray:
         return np.zeros(prices.shape)
     returns = np.array([np.log(p[lag:]/p[:-lag]) for p in prices])
     returns = np.insert(returns, [0], np.zeros(lag), axis=1)
+    #returns = returns/lag
     return returns
 
 
@@ -72,14 +73,14 @@ def get_day_time_cycle_coordinates(timestamps) -> tuple[np.ndarray, np.ndarray]:
     day_pos = np.array([2*np.pi * ((stamp.hour+1)/24) for stamp in timestamps])
     return get_coordinates(day_pos)
 
-
-def get_states(instruments: list, period="30d", interval="30m") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def get_states(instruments: list, period="30d", interval="30m", imb_bars=True) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """ Get prices, returns, and time cycle data and create the state array """
     trade_data = get_trade_data(instruments, period, interval)
-    timestamps = get_imbalance_bars(trade_data)
-    print(np.array(timestamps))
+    if imb_bars:
+        timestamps = get_imbalance_bars(trade_data)
+    else:
+        timestamps = [np.array(td.index) for td in trade_data]
     timestamps = get_common_timestamps(timestamps)
-    print(timestamps)
     prices = get_prices(trade_data, timestamps)
     non_normalized_prices = prices
     returns = np.array([get_returns(prices, lag) for lag in [1, 3, 10]])
