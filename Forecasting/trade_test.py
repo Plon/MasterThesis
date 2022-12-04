@@ -3,7 +3,7 @@ torch.manual_seed(0)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 import numpy as np
 import yfinance as yf
-from networks import AConvContinuous, AConvDiscrete, AConvLSTMContinuous, AConvLSTMDiscrete, AFFContinuous, FFDiscrete, ALSTMContinuous, ALSTMDiscrete, CConvSA, CFFSA
+from networks import AConvContinuous, AConvDiscrete, AConvLSTMContinuous, AConvLSTMDiscrete, AFFContinuous, FFDiscrete, ALSTMContinuous, ALSTMDiscrete, CConvSA, CFFSA, LinearDiscrete, LinearContinuous
 from reinforce import reinforce
 from deep_q_network import deep_q_network
 from deep_deterministic_policy_gradient import deep_determinstic_policy_gradient
@@ -26,6 +26,19 @@ col_scores = []
 num_runs = 500
 
 
+### Reinforce Linear 
+"""
+policy = LinearDiscrete(observation_space=total_num_features).to(device)
+scores, actions = reinforce(policy, te, act=act_stochastic_discrete, num_episodes=1000)
+#"""
+
+### REINFORCE linear CONTINUOUS ACTION SPACE
+#"""
+policy = LinearContinuous(observation_space=total_num_features, action_space=1).to(device)
+scores, actions = reinforce(policy, te, act=act_stochastic_continuous, alpha=1e-3, num_episodes=2001)
+#"""
+
+
 ### REINFORCE feedforward
 """
 policy = FFDiscrete(observation_space=total_num_features).to(device)
@@ -39,7 +52,7 @@ value_function = FFDiscrete(observation_space=total_num_features, action_space=1
 scores, actions = reinforce_baseline(policy, value_function, te, act=act_stochastic_discrete,  alpha_policy=1e-3, alpha_vf=1e-5)
 #"""
 
-### REINFORCE feedwordard CONTINUOUS ACTION SPACE
+### REINFORCE feedforward CONTINUOUS ACTION SPACE
 """
 policy = AFFContinuous(observation_space=total_num_features).to(device)
 scores, actions = reinforce(policy, te, act=act_stochastic_continuous, alpha=1e-4)
@@ -118,7 +131,7 @@ scores, actions = deep_q_network(q_net, te, act=act_DQN, batch_size=64, alpha=1e
 #"""
 
 ### DDPG
-#"""
+"""
 #actor = AConvLSTMDiscrete(observation_space=total_num_features, action_space=1).to(device)
 #actor = ALSTMDiscrete(observation_space=total_num_features, action_space=1, n_layers=2).to(device)
 #actor = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)

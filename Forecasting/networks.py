@@ -1,5 +1,3 @@
-# Neural nets that output a position on the continuous interval [-1, 1] or {-1, 0, 1}
-# As they are shallow there is no point in doing batch norm
 import numpy as np
 import torch
 torch.manual_seed(0)
@@ -58,14 +56,6 @@ class AConvLSTMDiscrete(nn.Module): #DRQN
         x = nn_activation_function(x)
         x = self.fc_out(x)
         return x, hx
-    
-    def act(self, state, hx=None) -> tuple[float, torch.Tensor, torch.Tensor]:
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        probs, hx = self.forward(state, hx)
-        probs = F.softmax(probs, dim=1)       
-        m = Categorical(probs) 
-        action = m.sample()
-        return (action.item() - 1), m.log_prob(action), hx
 
 
 ### ---------------- Continuous Action Space
@@ -106,15 +96,6 @@ class AConvLSTMContinuous(nn.Module):
         mean = torch.tanh(self.mean_layer(x))
         std = F.softplus(self.std_layer(x))
         return mean, std, hx
-    
-    def act(self, state, hx=None) -> tuple[float, torch.Tensor, torch.Tensor]:
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        mean, std, hx = self.forward(state, hx)
-        mean = torch.clamp(mean, -1, 1)
-        std += 1e-5
-        dist = Normal(mean, std) 
-        action = dist.sample() 
-        return torch.clamp(action, -1, 1).item(), dist.log_prob(action), hx
 
 
 ## ----------------- Convolutional
@@ -148,14 +129,6 @@ class AConvDiscrete(nn.Module): #DQN
         x = x.view(x.shape[0], -1) #Add all activation maps to one big activation map
         x = self.fc_out(x)
         return x
-
-    def act(self, state) -> tuple[float, torch.Tensor]:
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        probs = self.forward(state).cpu() 
-        probs = F.softmax(probs, dim=1)       
-        m = Categorical(probs) 
-        action = m.sample() 
-        return (action.item() - 1), m.log_prob(action)
 
 
 ### ---------------- Continuous Action Space
@@ -191,15 +164,6 @@ class AConvContinuous(nn.Module):
         std = F.softplus(self.std_layer(x))
         return mean, std
 
-    def act(self, state) -> tuple[float, torch.Tensor]:
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        mean, std = self.forward(state)
-        mean = torch.clamp(mean, -1, 1)
-        std += 1e-5
-        dist = Normal(mean, std) 
-        action = dist.sample() 
-        return torch.clamp(action, -1, 1).item(), dist.log_prob(action)
-
 
 ## ----------------- LSTM 
 ### ---------------- Discrete Action Space
@@ -224,14 +188,6 @@ class ALSTMDiscrete(nn.Module):
         x = nn_activation_function(x)
         x = self.fc_out(x)
         return x, hx
-    
-    def act(self, state, hx=None) -> tuple[float, torch.Tensor, tuple]:
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        probs, hx = self.forward(state, hx)  
-        probs = F.softmax(probs, dim=1)
-        m = Categorical(probs) 
-        action = m.sample() 
-        return (action.item() - 1), m.log_prob(action), hx
 
 
 ### ---------------- Continuous Action Space
@@ -257,15 +213,6 @@ class ALSTMContinuous(nn.Module):
         mean = torch.tanh(self.mean_layer(x))
         std = F.softplus(self.std_layer(x))
         return mean, std, hx
-    
-    def act(self, state, hx=None) -> tuple[float, torch.Tensor, torch.Tensor]:
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        mean, std, hx = self.forward(state, hx)
-        mean = torch.clamp(mean, -1, 1)
-        std += 1e-5
-        dist = Normal(mean, std) 
-        action = dist.sample() 
-        return torch.clamp(action, -1, 1).item(), dist.log_prob(action), hx
 
 
 ## ----------------- FF 
@@ -287,14 +234,6 @@ class FFDiscrete(nn.Module):
         x = self.fc_in(x)
         x = self.fc_out(x)
         return x
-    
-    def act(self, state) -> tuple[float, torch.Tensor]:
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        probs = self.forward(state).cpu()
-        probs = F.softmax(probs, dim=1)
-        m = Categorical(probs) 
-        action = m.sample() 
-        return (action.item() - 1), m.log_prob(action)
 
 
 ### ---------------- Continuous Action Space
@@ -317,15 +256,30 @@ class AFFContinuous(nn.Module):
         mean = torch.tanh(self.mean_layer(x))
         std = F.softplus(self.std_layer(x))
         return mean, std
-    
-    def act(self, state) -> tuple[float, torch.Tensor]:
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        mean, std = self.forward(state)
-        mean = torch.clamp(mean, -1, 1)
-        std += 1e-5
-        dist = Normal(mean, std) 
-        action = dist.sample() 
-        return torch.clamp(action, -1, 1).item(), dist.log_prob(action)
+
+
+## ----------------- Linear 
+### ---------------- Discrete Action Space
+class LinearDiscrete(nn.Module):
+    def __init__(self, observation_space=8, hidden_size=128, action_space=3, dropout=0.1) -> None:
+        super(LinearDiscrete, self).__init__()
+        self.fc_out = nn.Linear(observation_space, action_space)
+
+    def forward(self, x) -> torch.Tensor:
+        x = self.fc_out(x)
+        return x
+
+
+### ---------------- Continuous Action Space
+class LinearContinuous(nn.Module):
+    def __init__(self, observation_space=8, hidden_size=128, action_space=1, dropout=0.1) -> None:
+        super(LinearContinuous, self).__init__()    
+        self.fc_out = nn.Linear(observation_space, action_space)
+        self.std = torch.tensor(np.ones((action_space, )) * 0.1).squeeze() 
+
+    def forward(self, x) -> tuple[torch.Tensor, torch.Tensor]:
+        mean = self.fc_out(x) 
+        return mean, self.std
 
 
 # ------------------ State-Action

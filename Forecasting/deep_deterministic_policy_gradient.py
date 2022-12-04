@@ -25,18 +25,16 @@ def update(replay_buffer: ReplayMemory, batch_size: int, critic: torch.nn.Module
 
 
 def compute_actor_loss(actor, critic, state, act, recurrent=False) -> torch.Tensor: 
-    """ Returns policy loss -Q(s, mu(s)) """
+    """ Returns policy loss -Q(s, mu(s)) 
+        This works, but ideally would be more robust """
     #"""
     if recurrent: 
         action, _ = actor(state)
     else:
         action = actor(state)
     action = torch.tanh(action)
-    #"""
-    #state = state.squeeze().numpy()
-    #action, _ = act(actor, state, training=False)
     q_sa = critic(state, action)
-    loss = -1*torch.mean(q_sa)
+    loss = -1*torch.mean(q_sa) 
     return loss
 
 
@@ -44,7 +42,7 @@ def compute_critic_loss(critic, batch) -> torch.Tensor:
     """ Returns error Q(s_t, a) - R_t+1. No point using advantage """
     state, action, reward, _ = batch
     reward = (reward - reward.mean()) / (reward.std() + float(np.finfo(np.float32).eps)) # does this actually improve performance here?
-    q_sa = critic(state, action.reshape(-1, 1)).squeeze()
+    q_sa = critic(state, action.view(action.shape[0], -1)).squeeze()
     loss = torch.nn.MSELoss()(q_sa, reward)
     return loss
 

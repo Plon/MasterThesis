@@ -32,6 +32,7 @@ def act_stochastic_continuous(net: nn.Module, state: np.ndarray, hx=None, recurr
     else: 
         mean, std = net.forward(state)
     mean = torch.clamp(mean, -1, 1)
+    std = max(std, 0)
     std += 1e-8
     dist = Normal(mean, std) 
     action = dist.sample() 
@@ -80,11 +81,24 @@ def act_stochastic_portfolio(net: nn.Module, state: np.ndarray, hx=None, recurre
     m = MultivariateNormal(probs, torch.eye(probs.size(1))) # second arg is indentity matrix of size num instruments X num instruments
     action = m.sample()
     logprob = m.log_prob(action)
-    action = F.softmax(action, dim=1)
-    #action = action.mul(2).add(-1) # if we want long-short portfolio, maybe change
+    action = torch.tanh(action)
+    action = torch.clamp(action, -1, 1)
     action = np.array(action.squeeze())
     return action, logprob, hx
 
 
 ## ----------------- Deterministic Sampling 
 ### ---------------- Continous Action Space (DDPG)
+def act_DDPG_portfolio(net: nn.Module, state: np.ndarray, hx=None, recurrent=False, epsilon=0, training=True) -> tuple[float, torch.Tensor]:
+    state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+    with torch.no_grad():
+        if recurrent:
+            action, hx = net(state, hx)
+        else: 
+            action = net(state)
+    action = torch.tanh(action)
+    noise = ((np.random.rand(1)[0] * 2) - 1) #TODO maybe change to Ornstein-Uhlenbeck process
+    action += training*max(epsilon, 0)*noise
+    action = torch.clamp(action, -1, 1)
+    action = np.array(action.squeeze())
+    return action, hx
