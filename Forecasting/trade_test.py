@@ -12,13 +12,13 @@ import plotly.express as px
 import matplotlib.pyplot as plt
 from rl_trade_environment import TradeEnvironment
 from create_state_vector import get_states
-
+from action_selection import act_stochastic_discrete, act_stochastic_continuous, act_DQN, act_DDPG
 
 states, prices, _ = get_states(["CL=F"], imb_bars=True)
 num_instruments = 1
 num_features = states.shape[1]
 num_prev_obs = 2
-total_num_features = (num_features + 1) * num_instruments * num_prev_obs
+total_num_features = (num_features + num_instruments) * num_prev_obs
 
 te = TradeEnvironment(states, prices[0], num_prev_observations=num_prev_obs)
 
@@ -29,20 +29,20 @@ num_runs = 500
 ### REINFORCE feedforward
 """
 policy = FFDiscrete(observation_space=total_num_features).to(device)
-scores, actions = reinforce(policy, te, num_episodes=400)
+scores, actions = reinforce(policy, te, act=act_stochastic_discrete, num_episodes=400)
 #"""
 
 ### REINFORCE feedwordward with baseline
 """
 policy = FFDiscrete(observation_space=total_num_features).to(device)
 value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
-scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-3, alpha_vf=1e-5)
+scores, actions = reinforce_baseline(policy, value_function, te, act=act_stochastic_discrete,  alpha_policy=1e-3, alpha_vf=1e-5)
 #"""
 
 ### REINFORCE feedwordard CONTINUOUS ACTION SPACE
 """
 policy = AFFContinuous(observation_space=total_num_features).to(device)
-scores, actions = reinforce(policy, te, alpha=1e-4)
+scores, actions = reinforce(policy, te, act=act_stochastic_continuous, alpha=1e-4)
 #"""
 
 ### REINFORCE conv with baseline
@@ -50,71 +50,82 @@ scores, actions = reinforce(policy, te, alpha=1e-4)
 policy = AConvDiscrete(observation_space=total_num_features).to(device)
 value_function = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
 #value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
-scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-4, alpha_vf=1e-5)
+scores, actions = reinforce_baseline(policy, value_function, te, act=act_stochastic_discrete,alpha_policy=1e-4, alpha_vf=1e-5)
 #"""
 
-### Recurrent REINFORCE LSTM Discrete & Continuous Action Space
+### Recurrent REINFORCE LSTM Discrete  Action Space
 """
 policy = ALSTMDiscrete(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
-#policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
-scores, actions = reinforce(policy, te, alpha=1e-4, recurrent=True)
+scores, actions = reinforce(policy, te, alpha=1e-4, act=act_stochastic_discrete, recurrent=True)
 #"""
 
-### Recurrent REINFORCE with baseline LSTM Discrete & Continuous Action Space
+### Recurrent REINFORCE LSTM Continuous Action Space
+"""
+policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
+scores, actions = reinforce(policy, te, alpha=1e-4, act=act_stochastic_continuous, recurrent=True)
+#"""
+
+### Recurrent REINFORCE with baseline LSTM Discrete Action Space
 """
 policy = ALSTMDiscrete(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
-#policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
 value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
-scores, actions = reinforce_baseline(policy, value_function, te, alpha_policy=1e-4, alpha_vf=1e-5, recurrent=True)
+scores, actions = reinforce_baseline(policy, value_function, te, act=act_stochastic_discrete, alpha_policy=1e-4, alpha_vf=1e-5, recurrent=True)
+#"""
+
+### Recurrent REINFORCE with baseline LSTM Continuous Action Space
+"""
+policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
+value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
+scores, actions = reinforce_baseline(policy, value_function, te, act=act_stochastic_continuous, alpha_policy=1e-4, alpha_vf=1e-5, recurrent=True)
 #"""
 
 ### REINFORCE Conv
 """
 policy = AConvDiscrete(observation_space=total_num_features).to(device)
-scores, actions = reinforce(policy, te, alpha=1e-4)
+scores, actions = reinforce(policy, te, act=act_stochastic_discrete, alpha=1e-4)
 #"""
 
 ### REINFORCE Conv Continuous Action Space
 """
 policy = AConvContinuous(observation_space=total_num_features).to(device)
-scores, actions = reinforce(policy, te, alpha=1e-5)
+scores, actions = reinforce(policy, te, act=act_stochastic_continuous, alpha=1e-5)
 #"""
 
 ### Recurrent REINFORCE Conv LSTM 
 """
 policy = AConvLSTMDiscrete(observation_space=total_num_features, num_lstm_layers=2).to(device)
-scores, actions = reinforce(policy, te, alpha=1e-4, recurrent=True, print_freq=1)
+scores, actions = reinforce(policy, te, act=act_stochastic_discrete, alpha=1e-4, recurrent=True, print_freq=1)
 #"""
 
 ### Recurrent REINFORCE Conv LSTM Continuous Action Space
 """
 policy = AConvLSTMContinuous(observation_space=total_num_features, num_lstm_layers=2).to(device)
-scores, actions = reinforce(policy, te, alpha=1e-4, recurrent=True, print_freq=1)
+scores, actions = reinforce(policy, te, act=act_stochastic_continuous, alpha=1e-4, recurrent=True, print_freq=1)
 #"""
 
 ### DQN 
-#"""
+"""
 q_net = FFDiscrete(observation_space=total_num_features, action_space=3).to(device)
 #q_net = AConvDiscrete(observation_space=total_num_features, action_space=3).to(device)
-scores, actions = deep_q_network(q_net, te, batch_size=64, alpha=1e-4, num_episodes=501)
+scores, actions = deep_q_network(q_net, te, act=act_DQN, batch_size=64, alpha=1e-4, num_episodes=501)
 #"""
 
 ### DRQN 
 """
 #q_net = AConvLSTMDiscrete(observation_space=total_num_features, action_space=3, num_lstm_layers=1).to(device)
 q_net = ALSTMDiscrete(observation_space=total_num_features, action_space=3, n_layers=2).to(device)
-scores, actions = deep_q_network(q_net, te, batch_size=64, alpha=1e-4, num_episodes=501, recurrent=True)
+scores, actions = deep_q_network(q_net, te, act=act_DQN, batch_size=64, alpha=1e-4, num_episodes=501, recurrent=True)
 #"""
 
 ### DDPG
-"""
+#"""
 #actor = AConvLSTMDiscrete(observation_space=total_num_features, action_space=1).to(device)
 #actor = ALSTMDiscrete(observation_space=total_num_features, action_space=1, n_layers=2).to(device)
-actor = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
-#actor = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
+#actor = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
+actor = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
 #critic = CConvSA(observation_space=total_num_features).to(device)
 critic = CFFSA(observation_space=total_num_features).to(device)
-scores, actions = deep_determinstic_policy_gradient(actor, critic, te, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, recurrent=False)
+scores, actions = deep_determinstic_policy_gradient(actor, critic, te, act=act_DDPG, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, recurrent=False)
 #"""
 
 ### PLOTS

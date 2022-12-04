@@ -73,7 +73,7 @@ def get_day_time_cycle_coordinates(timestamps) -> tuple[np.ndarray, np.ndarray]:
     day_pos = np.array([2*np.pi * ((stamp.hour+1)/24) for stamp in timestamps])
     return get_coordinates(day_pos)
 
-def get_states(instruments: list, period="30d", interval="30m", imb_bars=True) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def get_states(instruments: list, period="30d", interval="30m", imb_bars=True, riskfree_asset=False) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """ Get prices, returns, and time cycle data and create the state array """
     trade_data = get_trade_data(instruments, period, interval)
     if imb_bars:
@@ -83,12 +83,19 @@ def get_states(instruments: list, period="30d", interval="30m", imb_bars=True) -
     timestamps = get_common_timestamps(timestamps)
     prices = get_prices(trade_data, timestamps)
     non_normalized_prices = prices
-    returns = np.array([get_returns(prices, lag) for lag in [1, 3, 10]])
+    lag_intervals = [1, 3, 10]
+    returns = np.array([get_returns(prices, lag) for lag in lag_intervals])
     returns = returns.reshape(returns.shape[0]*returns.shape[1], returns.shape[2])
     prices = normalize_prices(prices)
     day = get_day_time_cycle_coordinates(timestamps)
     week = get_week_time_cycle_coordinates(timestamps)
     year = get_year_time_cycle_coordinates(timestamps)
+
+    if riskfree_asset:
+        riskfree_price = np.ones((1, len(timestamps),))
+        prices = np.concatenate((riskfree_price, prices))
+        riskfree_returns = np.zeros((len(lag_intervals), len(timestamps)))
+        returns = np.concatenate((riskfree_returns, returns))
 
     states = prices
     for arr in [returns, year, week, day]:

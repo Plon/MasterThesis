@@ -18,7 +18,7 @@ def get_policy_loss(rewards: list, log_probs: list) -> torch.Tensor:
     return policy_loss
 
 
-def reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
+def reinforce(policy_network: torch.nn.Module, env, act, alpha=1e-3, weight_decay=1e-5, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
     optimizer = optim.Adam(policy_network.parameters(), lr=alpha, weight_decay=weight_decay)
     reward_history = []
     action_history = []
@@ -36,11 +36,10 @@ def reinforce(policy_network, env, alpha=1e-3, weight_decay=1e-5, num_episodes=1
         hx = None
 
         for _ in range(max_episode_length):
-            if recurrent: 
-                action, log_prob, hx = policy_network.act(state, hx) #A_{t-1}
-            else:
-                action, log_prob = policy_network.act(state) #A_{t-1}
+            #print("S: ",state)
+            action, log_prob, hx = act(policy_network, state, hx, recurrent) #A_{t-1}
             state, reward, done, _ = env.step(action) # S_t, R_t 
+            #print("R: ",reward)
 
             if done:
                 break

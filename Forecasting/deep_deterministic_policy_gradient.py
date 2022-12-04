@@ -7,24 +7,9 @@ import torch.nn as nn
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from batch_learning import ReplayMemory, Transition, get_batch
 from reinforce import optimize
-nn_activation_function = nn.LeakyReLU()
 
 
-def act(net, state, hx=None, epsilon=0, recurrent=False, training=True) -> torch.Tensor:
-    state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-    with torch.no_grad():
-        if recurrent:
-            action, hx = net(state, hx)
-        else: 
-            action = net(state)
-    action = torch.tanh(action)
-    noise = ((np.random.rand(1)[0] * 2) - 1) #TODO maybe change to Ornstein-Uhlenbeck process
-    action += training*max(epsilon, 0)*noise
-    action = torch.clamp(action, -1, 1).item()
-    return action, hx
-
-
-def update(replay_buffer: ReplayMemory, batch_size: int, critic: torch.nn.Module, actor: torch.nn.Module, optimizer_critic: torch.optim, optimizer_actor: torch.optim, recurrent=False) -> None: 
+def update(replay_buffer: ReplayMemory, batch_size: int, critic: torch.nn.Module, actor: torch.nn.Module, optimizer_critic: torch.optim, optimizer_actor: torch.optim, act, recurrent=False) -> None: 
     """ Get batch, get loss and optimize critic, freeze q net, get loss and optimize actor, unfreeze q net """
     batch = get_batch(replay_buffer, batch_size)
     if batch is None:
@@ -33,27 +18,30 @@ def update(replay_buffer: ReplayMemory, batch_size: int, critic: torch.nn.Module
     optimize(optimizer_critic, c_loss)
     for p in critic.parameters(): # Freeze Q-net
         p.requires_grad = False
-    a_loss = compute_actor_loss(actor, critic, batch[0], recurrent)
+    a_loss = compute_actor_loss(actor, critic, batch[0], act, recurrent)
     optimize(optimizer_actor, a_loss)
     for p in critic.parameters(): # Unfreeze Q-net
         p.requires_grad = True
 
 
-def compute_actor_loss(actor, critic, state, recurrent=False) -> torch.Tensor: 
+def compute_actor_loss(actor, critic, state, act, recurrent=False) -> torch.Tensor: 
     """ Returns policy loss -Q(s, mu(s)) """
+    #"""
     if recurrent: 
         action, _ = actor(state)
     else:
         action = actor(state)
     action = torch.tanh(action)
+    #"""
+    #state = state.squeeze().numpy()
+    #action, _ = act(actor, state, training=False)
     q_sa = critic(state, action)
     loss = -1*torch.mean(q_sa)
     return loss
 
 
 def compute_critic_loss(critic, batch) -> torch.Tensor: 
-    """ Returns td error Q(s_t, a) - R_t+1 
-        No point using advantage. td error works better in this setting """
+    """ Returns error Q(s_t, a) - R_t+1. No point using advantage """
     state, action, reward, _ = batch
     reward = (reward - reward.mean()) / (reward.std() + float(np.finfo(np.float32).eps)) # does this actually improve performance here?
     q_sa = critic(state, action.reshape(-1, 1)).squeeze()
@@ -61,7 +49,7 @@ def compute_critic_loss(critic, batch) -> torch.Tensor:
     return loss
 
 
-def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e-3, alpha_critic=1e-3, weight_decay=1e-4, batch_size=30, update_freq=1, exploration_rate=1, exploration_decay=(1-1e-3), exploration_min=0, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
+def deep_determinstic_policy_gradient(actor_net, critic_net, env, act, alpha_actor=1e-3, alpha_critic=1e-3, weight_decay=1e-4, batch_size=30, update_freq=1, exploration_rate=1, exploration_decay=(1-1e-3), exploration_min=0, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
     """
     Training for DDPG
 
@@ -69,6 +57,7 @@ def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e
         actor_net (): network that parameterizes the policy
         critic_net (): network that parameterizes the Q-learning function
         env: environment that the rl agent interacts with
+        act: function that chooses action. depends on problem.
         leraning_rate_q (float): 
         leraning_rate_policy (float): 
         weight_decay (float): regularization 
@@ -104,7 +93,7 @@ def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e
         hx = None
 
         for i in range(max_episode_length):
-            action, hx = act(actor_net, state, hx, exploration_rate, recurrent, train) 
+            action, hx = act(actor_net, state, hx, recurrent, exploration_rate, train) 
             next_state, reward, done, _ = env.step(action) 
 
             if done:
@@ -118,7 +107,7 @@ def deep_determinstic_policy_gradient(actor_net, critic_net, env, alpha_actor=1e
                             torch.from_numpy(next_state).float().unsqueeze(0).to(device))
 
             if train and len(replay_buffer) >= batch_size and (i+1) % update_freq == 0:
-                update(replay_buffer, batch_size, critic_net, actor_net, optimizer_critic, optimizer_actor, recurrent)    
+                update(replay_buffer, batch_size, critic_net, actor_net, optimizer_critic, optimizer_actor, act, recurrent)    
             
             state = next_state
             exploration_rate = max(exploration_rate*exploration_decay, exploration_min)

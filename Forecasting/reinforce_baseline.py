@@ -16,7 +16,7 @@ def get_policy_and_value_loss(value_function, state_batch, reward_batch, log_pro
     return policy_loss, vf_loss
 
 
-def reinforce_baseline(policy_network, value_function, env, alpha_policy=1e-3, alpha_vf=1e-5, weight_decay=1e-5, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
+def reinforce_baseline(policy_network: torch.nn.Module, value_function: torch.nn.Module, env, act, alpha_policy=1e-3, alpha_vf=1e-5, weight_decay=1e-5, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
     optimizer_policy = optim.Adam(policy_network.parameters(), lr=alpha_policy, weight_decay=weight_decay)
     optimizer_vf = optim.Adam(value_function.parameters(), lr=alpha_vf, weight_decay=weight_decay)
     reward_history = []
@@ -38,12 +38,9 @@ def reinforce_baseline(policy_network, value_function, env, alpha_policy=1e-3, a
         hx = None
 
         for _ in range(max_episode_length):
-            if recurrent: 
-                action, log_prob, hx = policy_network.act(state, hx) #A_{t-1}
-            else:
-                action, log_prob = policy_network.act(state) #A_{t-1}
+            action, log_prob, hx = act(policy_network, state, hx, recurrent) #A_{t-1}
             state, reward, done, _ = env.step(action) # S_t, R_t 
-
+            
             if done:
                 break
 

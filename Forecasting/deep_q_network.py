@@ -8,20 +8,6 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 criterion = torch.nn.MSELoss()
 
 
-def act(model, state, hx=None, epsilon=0, recurrent=False) -> int:
-    state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-    with torch.no_grad():
-        if recurrent: 
-            action_vals, hx = model(state, hx)
-        else: 
-            action_vals = model(state).cpu()
-    if random.random() < epsilon:
-        action = np.random.randint(-1, 2) #[-1, 2)
-    else:
-        action = action_vals.argmax().item() - 1
-    return action, hx
-
-
 def compute_loss_dqn(batch: tuple[torch.Tensor], net: torch.nn.Module, recurrent=False) -> torch.Tensor: 
     state_batch, action_batch, reward_batch, _ = batch
     reward_batch = (reward_batch - reward_batch.mean()) / (reward_batch.std() + float(np.finfo(np.float32).eps))
@@ -44,14 +30,15 @@ def update(replay_buffer: ReplayMemory, batch_size: int, net: torch.nn.Module, o
     optimizer.step()
 
 
-def deep_q_network(q_net, env, alpha=1e-4, weight_decay=1e-5, batch_size=10, exploration_rate=1, exploration_decay=(1-1e-3), exploration_min=0, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
+def deep_q_network(q_net, env, act, alpha=1e-4, weight_decay=1e-5, batch_size=10, exploration_rate=1, exploration_decay=(1-1e-3), exploration_min=0, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
     """
     Training for DQN
 
     Args: 
         q_net (): network that parameterizes the Q-learning function
         env: environment that the rl agent interacts with
-        leraning_rate (float): 
+        act: function that chooses action. depends on problem.
+        learning_rate (float): 
         weight_decay (float): regularization 
         target_update_freq (int): 
         batch_size (int): 
@@ -83,7 +70,7 @@ def deep_q_network(q_net, env, alpha=1e-4, weight_decay=1e-5, batch_size=10, exp
         hx = None
 
         for i in range(max_episode_length): 
-            action, hx = act(q_net, state, hx, exploration_rate, recurrent) 
+            action, hx = act(q_net, state, hx, recurrent, exploration_rate) 
             next_state, reward, done, _ = env.step(action) 
 
             if done:

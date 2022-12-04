@@ -1,29 +1,24 @@
 import numpy as np
+from rl_trade_environment import asset_return
 
 
-def asset_return(position_new, position_old, price_new, price_old, transaction_fraction=0.002) -> float:
-    """ R_t = A_{t-1} * (p_t - p_{t-1}) - p_{t-1} * c * |A_{t-1} - A_{t-2}| """ 
-    return position_new * (price_new - price_old) - (price_old * transaction_fraction * abs(position_new - position_old))
-
-
-class TradeEnvironment():
-    def __init__(self, states, prices, transaction_fraction=0.002, num_prev_observations=10) -> None:
+class PortfolioEnvironment():
+    def __init__(self, states, num_instruments=1, transaction_fraction=0.002, num_prev_observations=10) -> None:
         self.transaction_fraction = float(transaction_fraction)
         num_prev_observations = int(num_prev_observations)
         if num_prev_observations < 1:
             raise ValueError("Argument num_prev_observations must be integer >= 1, and not {}".format(num_prev_observations))
         
-        self.states = states 
+        self.num_instruments = num_instruments
+        self.states = states
         self.current_index = 0 
-        self.position = 0 # initial empty portfolio
-        #self.prices = np.array(list(zip(*states))[0]) # assume prices are in the first collumn
-        self.prices = prices # need to have the non-normalized prices to correctly model transaction costs... However, the model perform better with normalized prices as rewards...
+        self.position = np.zeros((num_instruments,))
         self.observations = np.array([self.newest_observation() for _ in range(num_prev_observations)]) # State vector of previous n observations
 
     def reset(self) -> np.ndarray:
         """ Reset environment to start and return initial state """
         self.current_index = 0 
-        self.position = 0
+        self.position.fill(0)
         self.observations = np.array([self.newest_observation() for _ in range(len(self.observations))]) 
         return self.state()
 
@@ -39,15 +34,14 @@ class TradeEnvironment():
         return np.insert(self.states[self.current_index], len(self.states[self.current_index]), self.position)
 
     def reward_function(self, action) -> float: 
-        """ R_t = A_{t-1} * (p_t - p_{t-1}) - p_{t-1} * c * |A_{t-1} - A_{t-2}| """ 
-        #TODO how to calculate transaction costs with normalized prices
-        return asset_return(action, self.position, self.states[self.current_index][0], self.states[self.current_index-1][0], self.transaction_fraction)
-        return asset_return(action, self.position, self.prices[self.current_index], self.prices[self.current_index-1], self.transaction_fraction)
+        """ Calculate return of all assets from t-1 to t, and then return sharpe """
+        a_return = asset_return(action, self.position, self.states[self.current_index][:self.num_instruments], self.states[self.current_index-1][:self.num_instruments])
+        #if self.num_instruments  == 1: 
+        #    return a_return
+        return np.mean(a_return)/(np.std(a_return) + float(np.finfo(np.float32).eps))
 
     def step(self, action) -> tuple[np.ndarray, float, bool, dict]:
         """
-        Take step 
-
         Args:
             action
         Returns:
@@ -57,7 +51,7 @@ class TradeEnvironment():
             info
         """
         self.current_index += 1 
-        assert action <= 1. and action >= -1.
+        assert all(action <= 1.) and all(action >= -1.)
         if self.current_index >= len(self.states): 
             return self.state(), 0, True, {} # The end has been reached
         reward = self.reward_function(action)  
