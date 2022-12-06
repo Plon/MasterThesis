@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from rl_trade_environment import TradeEnvironment
 from create_state_vector import get_states
 from action_selection import act_stochastic_discrete, act_stochastic_continuous, act_DQN, act_DDPG
+from proximal_policy_optimization import proximal_policy_optimization
 
 states, prices, _ = get_states(["CL=F"], imb_bars=True)
 num_instruments = 1
@@ -33,7 +34,7 @@ scores, actions = reinforce(policy, te, act=act_stochastic_discrete, num_episode
 #"""
 
 ### REINFORCE linear CONTINUOUS ACTION SPACE
-#"""
+"""
 policy = LinearContinuous(observation_space=total_num_features, action_space=1).to(device)
 scores, actions = reinforce(policy, te, act=act_stochastic_continuous, alpha=1e-3, num_episodes=2001)
 #"""
@@ -139,6 +140,14 @@ actor = FFDiscrete(observation_space=total_num_features, action_space=1).to(devi
 #critic = CConvSA(observation_space=total_num_features).to(device)
 critic = CFFSA(observation_space=total_num_features).to(device)
 scores, actions = deep_determinstic_policy_gradient(actor, critic, te, act=act_DDPG, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, recurrent=False)
+#"""
+
+### PPO Linear - idea doesnt fit the problem at all
+#"""
+actor = FFDiscrete(observation_space=total_num_features).to(device)
+#critic = LinearDiscrete(observation_space=total_num_features, action_space=3).to(device)
+critic = CFFSA(observation_space=total_num_features, action_space=1).to(device)
+scores, actions = proximal_policy_optimization(actor, critic, te, act=act_stochastic_discrete, batch_size=32, alpha_actor=1e-3, alpha_critic=1e-5, num_episodes=1001, recurrent=False)
 #"""
 
 ### PLOTS

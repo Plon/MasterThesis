@@ -72,6 +72,7 @@ def act_DDPG(net: nn.Module, state: np.ndarray, hx=None, recurrent=False, epsilo
 
 # ------------------ Portfolio
 ## ----------------- Stochastic Sampling
+### ---------------- Long & Short 
 def act_stochastic_portfolio(net: nn.Module, state: np.ndarray, hx=None, recurrent=False, epsilon=0) -> tuple[float, torch.Tensor, tuple]:
     state = torch.from_numpy(state).float().unsqueeze(0).to(device)
     if recurrent: 
@@ -83,6 +84,21 @@ def act_stochastic_portfolio(net: nn.Module, state: np.ndarray, hx=None, recurre
     logprob = m.log_prob(action)
     action = torch.tanh(action)
     action = torch.clamp(action, -1, 1)
+    action = np.array(action.squeeze())
+    return action, logprob, hx
+
+
+### ---------------- Long only softmax weighted (sum weights = 1)
+def act_stochastic_portfolio_long(net: nn.Module, state: np.ndarray, hx=None, recurrent=False, epsilon=0) -> tuple[float, torch.Tensor, tuple]:
+    state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+    if recurrent: 
+        probs, hx = net.forward(state, hx)
+    else: 
+        probs = net.forward(state).cpu()
+    m = MultivariateNormal(probs, torch.eye(probs.size(1))) 
+    action = m.sample()
+    logprob = m.log_prob(action)
+    action = F.softmax(action, dim=1)
     action = np.array(action.squeeze())
     return action, logprob, hx
 

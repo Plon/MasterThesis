@@ -20,7 +20,7 @@ import plotly.express as px
 import matplotlib.pyplot as plt
 from rl_portfolio_environment import PortfolioEnvironment
 from create_state_vector import get_states
-from action_selection import act_stochastic_portfolio, act_DDPG_portfolio
+from action_selection import act_stochastic_portfolio, act_stochastic_portfolio_long, act_DDPG_portfolio
 
 #instruments = ["CL=F", "NG=F"] #WTI crude futures, Natural gas futures
 instruments = ["CL=F", "NG=F", "ALI=F"] #WTI crude futures, Natural gas futures, Aluminium futures
@@ -37,14 +37,26 @@ pe = PortfolioEnvironment(states, num_instruments=num_instruments, num_prev_obse
 
 
 
-# TODO add compatibility to DQN - error calculation - will only work with discrete action space and will not scale for many instruments. a lost cause to implement
-# TODO try to make rl_portfolio_env compatible with single instrument trading
+# TODO add compatibility to DQN - error calculation - will only work with discrete action space and will not scale for many instruments. will have 3**n possible values
+# TODO try to make rl_portfolio_env compatible with single instrument trading.
+# think the only thing you have to do is to put the one action into an array
 
-### reinforce linear
+# should there be a transactin cost for riskfree asset?
+# can be an idea to decay std instead of random exploration. 
+
+
+### reinforce linear long short 
 """
 policy = LinearDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
 #policy = AConvDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
-scores, actions = reinforce(policy, pe, act=act_stochastic_portfolio, alpha=1e-3, num_episodes=2001)
+scores, actions = reinforce(policy, pe, act=act_stochastic_portfolio, alpha=1e-2, num_episodes=2001)
+#"""
+
+### reinforce linear long only softmax
+"""
+policy = LinearDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
+#policy = AConvDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
+scores, actions = reinforce(policy, pe, act=act_stochastic_portfolio_long, alpha=1e-2, num_episodes=2001)
 #"""
 
 ### reinforce feedforward 
@@ -54,11 +66,18 @@ policy = FFDiscrete(observation_space=total_num_features, action_space=num_instr
 scores, actions = reinforce(policy, pe, act=act_stochastic_portfolio, alpha=1e-3, num_episodes=2001)
 #"""
 
-### Recurrent reinforce feedforward 
+### Recurrent reinforce  
 """
 #policy = AConvLSTMDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
-policy = ALSTMDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
-scores, actions = reinforce(policy, pe, act=act_stochastic_portfolio, alpha=1e-4, num_episodes=2001, print_freq=1, recurrent=True)
+policy = ALSTMDiscrete(observation_space=total_num_features, action_space=num_instruments, n_layers=1).to(device)
+scores, actions = reinforce(policy, pe, act=act_stochastic_portfolio, alpha=1e-3, num_episodes=2001, print_freq=1, recurrent=True)
+#"""
+
+### Recurrent reinforce long only
+#"""
+#policy = AConvLSTMDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
+policy = ALSTMDiscrete(observation_space=total_num_features, action_space=num_instruments, n_layers=1).to(device)
+scores, actions = reinforce(policy, pe, act=act_stochastic_portfolio_long, alpha=1e-3, num_episodes=2001, print_freq=1, recurrent=True)
 #"""
 
 ### reinforce feedwordward with baseline
@@ -72,7 +91,7 @@ scores, actions = reinforce_baseline(policy, value_function, pe, act=act_stochas
 
 
 ### DDPG
-#"""
+"""
 #actor = AConvLSTMDiscrete(observation_space=total_num_features, action_space=1).to(device)
 #actor = ALSTMDiscrete(observation_space=total_num_features, action_space=1, n_layers=2).to(device)
 #actor = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
