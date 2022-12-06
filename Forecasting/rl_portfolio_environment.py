@@ -1,5 +1,10 @@
 import numpy as np
-from rl_trade_environment import asset_return
+
+
+#TODO how to calculate transaction costs with normalized prices
+def asset_return(position_new, position_old, price_new, price_old, transaction_fraction=0.002) -> float:
+    """ R_t = A_{t-1} * (p_t - p_{t-1}) - p_{t-1} * c * |A_{t-1} - A_{t-2}| """ 
+    return position_new * (price_new - price_old) - (price_old * transaction_fraction * abs(position_new - position_old))
 
 
 class PortfolioEnvironment():
@@ -34,10 +39,11 @@ class PortfolioEnvironment():
         return np.insert(self.states[self.current_index], len(self.states[self.current_index]), self.position)
 
     def reward_function(self, action) -> float: 
-        """ Calculate return of all assets from t-1 to t, and then return sharpe """
+        """ Calculate return of all assets from t-1 to t, and then return sharpe.
+            If only one insturment, just return the return """
         a_return = asset_return(action, self.position, self.states[self.current_index][:self.num_instruments], self.states[self.current_index-1][:self.num_instruments])
-        #if self.num_instruments  == 1: 
-        #    return a_return
+        if self.num_instruments  == 1: 
+            return np.mean(a_return) 
         return np.mean(a_return)/(np.std(a_return) + float(np.finfo(np.float32).eps))
 
     def step(self, action) -> tuple[np.ndarray, float, bool, dict]:
@@ -50,11 +56,13 @@ class PortfolioEnvironment():
             termination status
             info
         """
+        if type(action) != np.ndarray:
+            action = np.array([action])
         self.current_index += 1 
         assert all(action <= 1.) and all(action >= -1.)
         if self.current_index >= len(self.states): 
             return self.state(), 0, True, {} # The end has been reached
-        reward = self.reward_function(action)  
+        reward = self.reward_function(action)
         self.position = action
         self.observations = np.concatenate((self.observations[1:], [self.newest_observation()]), axis=0) # FIFO state vector update
         return self.state(), reward, False, {}

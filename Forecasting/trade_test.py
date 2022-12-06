@@ -10,10 +10,10 @@ from deep_deterministic_policy_gradient import deep_determinstic_policy_gradient
 from reinforce_baseline import reinforce_baseline
 import plotly.express as px
 import matplotlib.pyplot as plt
-from rl_trade_environment import TradeEnvironment
 from create_state_vector import get_states
 from action_selection import act_stochastic_discrete, act_stochastic_continuous, act_DQN, act_DDPG
 from proximal_policy_optimization import proximal_policy_optimization
+from rl_portfolio_environment import PortfolioEnvironment
 
 states, prices, _ = get_states(["CL=F"], imb_bars=True)
 num_instruments = 1
@@ -21,7 +21,7 @@ num_features = states.shape[1]
 num_prev_obs = 2
 total_num_features = (num_features + num_instruments) * num_prev_obs
 
-te = TradeEnvironment(states, prices[0], num_prev_observations=num_prev_obs)
+te = PortfolioEnvironment(states, num_instruments=num_instruments, num_prev_observations=num_prev_obs)
 
 col_scores = []
 num_runs = 500
@@ -132,7 +132,7 @@ scores, actions = deep_q_network(q_net, te, act=act_DQN, batch_size=64, alpha=1e
 #"""
 
 ### DDPG
-"""
+#"""
 #actor = AConvLSTMDiscrete(observation_space=total_num_features, action_space=1).to(device)
 #actor = ALSTMDiscrete(observation_space=total_num_features, action_space=1, n_layers=2).to(device)
 #actor = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
@@ -143,7 +143,7 @@ scores, actions = deep_determinstic_policy_gradient(actor, critic, te, act=act_D
 #"""
 
 ### PPO Linear - idea doesnt fit the problem at all
-#"""
+"""
 actor = FFDiscrete(observation_space=total_num_features).to(device)
 #critic = LinearDiscrete(observation_space=total_num_features, action_space=3).to(device)
 critic = CFFSA(observation_space=total_num_features, action_space=1).to(device)

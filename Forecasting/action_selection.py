@@ -103,8 +103,8 @@ def act_stochastic_portfolio_long(net: nn.Module, state: np.ndarray, hx=None, re
     return action, logprob, hx
 
 
-## ----------------- Deterministic Sampling 
-### ---------------- Continous Action Space (DDPG)
+## ----------------- Deterministic Sampling (DDPG)
+### ---------------- Long & Short 
 def act_DDPG_portfolio(net: nn.Module, state: np.ndarray, hx=None, recurrent=False, epsilon=0, training=True) -> tuple[float, torch.Tensor]:
     state = torch.from_numpy(state).float().unsqueeze(0).to(device)
     with torch.no_grad():
@@ -116,5 +116,21 @@ def act_DDPG_portfolio(net: nn.Module, state: np.ndarray, hx=None, recurrent=Fal
     noise = ((np.random.rand(1)[0] * 2) - 1) #TODO maybe change to Ornstein-Uhlenbeck process
     action += training*max(epsilon, 0)*noise
     action = torch.clamp(action, -1, 1)
+    action = np.array(action.squeeze())
+    return action, hx
+
+
+### ---------------- Long only softmax weighted (sum weights = 1)
+def act_DDPG_portfolio_long(net: nn.Module, state: np.ndarray, hx=None, recurrent=False, epsilon=0, training=True) -> tuple[float, torch.Tensor]:
+    state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+    with torch.no_grad():
+        if recurrent:
+            action, hx = net(state, hx)
+        else: 
+            action = net(state)
+    action = torch.tanh(action)
+    #noise = ((np.random.rand(1)[0] * 2) - 1) #TODO maybe change to Ornstein-Uhlenbeck process
+    #action += training*max(epsilon, 0)*noise
+    action = F.softmax(action, dim=1)
     action = np.array(action.squeeze())
     return action, hx
