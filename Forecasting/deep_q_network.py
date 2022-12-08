@@ -1,33 +1,31 @@
-import random
 import numpy as np
 from batch_learning import ReplayMemory, Transition, get_batch
 import torch
 torch.manual_seed(0)
 import torch.optim as optim
+from action_selection import get_action_pobs
+from reinforce import optimize
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 criterion = torch.nn.MSELoss()
 
 
 def compute_loss_dqn(batch: tuple[torch.Tensor], net: torch.nn.Module, recurrent=False) -> torch.Tensor: 
+    """ Return critic loss 1/N * (Q(s_t, a_t) - R)^2 for t = 0,1,...,N """
     state_batch, action_batch, reward_batch, _ = batch
     reward_batch = (reward_batch - reward_batch.mean()) / (reward_batch.std() + float(np.finfo(np.float32).eps))
-    if recurrent:
-        state_action_vals = net(state_batch)[0][range(action_batch.size(0)), (action_batch.long()+1)]
-    else:
-        state_action_vals = net(state_batch)[range(action_batch.size(0)), (action_batch.long()+1)] 
+    action_batch = action_batch.flatten().long().add(1) #add 1 because -1 actions before
+    state_vals, _ = get_action_pobs(net=net, state=state_batch, recurrent=recurrent)
+    state_action_vals = state_vals[range(action_batch.size(0)), action_batch]
     return criterion(state_action_vals, reward_batch)
 
 
 def update(replay_buffer: ReplayMemory, batch_size: int, net: torch.nn.Module, optimizer: torch.optim, recurrent=False) -> None:
+    """ Get loss and perform optimization step """
     batch = get_batch(replay_buffer, batch_size)
     if batch is None:
         return
-    optimizer.zero_grad()
     loss = compute_loss_dqn(batch, net, recurrent)
-    loss.backward()
-    #Pay attention to possible exploding gradient for certain hyperparameters
-    #torch.nn.utils.clip_grad_norm_(net.parameters(), 1) 
-    optimizer.step()
+    optimize(optimizer, loss)
 
 
 def deep_q_network(q_net, env, act, alpha=1e-4, weight_decay=1e-5, batch_size=10, exploration_rate=1, exploration_decay=(1-1e-3), exploration_min=0, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
@@ -79,7 +77,7 @@ def deep_q_network(q_net, env, act, alpha=1e-4, weight_decay=1e-5, batch_size=10
             actions.append(action)
             rewards.append(reward)
             replay_buffer.push(torch.from_numpy(state).float().unsqueeze(0).to(device), 
-                            torch.FloatTensor([action]), 
+                            torch.FloatTensor(np.array([action])), 
                             torch.FloatTensor([reward]), 
                             torch.from_numpy(next_state).float().unsqueeze(0).to(device))
 

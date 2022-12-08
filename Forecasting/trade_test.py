@@ -3,7 +3,7 @@ torch.manual_seed(0)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 import numpy as np
 import yfinance as yf
-from networks import AConvContinuous, AConvDiscrete, AConvLSTMContinuous, AConvLSTMDiscrete, AFFContinuous, FFDiscrete, ALSTMContinuous, ALSTMDiscrete, CConvSA, CFFSA, LinearDiscrete, LinearContinuous
+from networks import AConvDiscrete, AConvLSTMDiscrete, FFDiscrete, ALSTMDiscrete, CConvSA, CFFSA, LinearDiscrete
 from reinforce import reinforce
 from deep_q_network import deep_q_network
 from deep_deterministic_policy_gradient import deep_determinstic_policy_gradient
@@ -11,7 +11,7 @@ from reinforce_baseline import reinforce_baseline
 import plotly.express as px
 import matplotlib.pyplot as plt
 from create_state_vector import get_states
-from action_selection import act_stochastic_discrete, act_stochastic_continuous, act_DQN, act_DDPG
+from action_selection import act_stochastic_discrete, act_DQN, act_DDPG_portfolio, action_transform, action_softmax_transform, act_stochastic_continuous_2
 from proximal_policy_optimization import proximal_policy_optimization
 from rl_portfolio_environment import PortfolioEnvironment
 
@@ -33,12 +33,11 @@ policy = LinearDiscrete(observation_space=total_num_features).to(device)
 scores, actions = reinforce(policy, te, act=act_stochastic_discrete, num_episodes=1000)
 #"""
 
-### REINFORCE linear CONTINUOUS ACTION SPACE
-"""
-policy = LinearContinuous(observation_space=total_num_features, action_space=1).to(device)
-scores, actions = reinforce(policy, te, act=act_stochastic_continuous, alpha=1e-3, num_episodes=2001)
+### REINFORCE linear CONTINUOUS ACTION SPACE decreasing std as exploration rate
 #"""
-
+policy = LinearDiscrete(observation_space=total_num_features, action_space=1).to(device)
+scores, actions = reinforce(policy, te, act=act_stochastic_continuous_2, exploration_min=0.1, alpha=1e-3, num_episodes=2001)
+#"""
 
 ### REINFORCE feedforward
 """
@@ -53,10 +52,10 @@ value_function = FFDiscrete(observation_space=total_num_features, action_space=1
 scores, actions = reinforce_baseline(policy, value_function, te, act=act_stochastic_discrete,  alpha_policy=1e-3, alpha_vf=1e-5)
 #"""
 
-### REINFORCE feedforward CONTINUOUS ACTION SPACE
+### REINFORCE feedforward CONTINUOUS ACTION SPACE decreasing std as exploration rate
 """
-policy = AFFContinuous(observation_space=total_num_features).to(device)
-scores, actions = reinforce(policy, te, act=act_stochastic_continuous, alpha=1e-4)
+policy = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
+scores, actions = reinforce(policy, te, act=act_stochastic_continuous_2, alpha=1e-4, num_episodes=5001, exploration_decay=(1-0.0001))
 #"""
 
 ### REINFORCE conv with baseline
@@ -73,10 +72,10 @@ policy = ALSTMDiscrete(observation_space=total_num_features, n_layers=2, dropout
 scores, actions = reinforce(policy, te, alpha=1e-4, act=act_stochastic_discrete, recurrent=True)
 #"""
 
-### Recurrent REINFORCE LSTM Continuous Action Space
+### Recurrent REINFORCE LSTM Continuous Action Space decreasing std as exploration rate
 """
-policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
-scores, actions = reinforce(policy, te, alpha=1e-4, act=act_stochastic_continuous, recurrent=True)
+policy = ALSTMDiscrete(observation_space=total_num_features, action_space=1, n_layers=2, dropout=0.1).to(device)
+scores, actions = reinforce(policy, te, exploration_decay=(1-0.0001), alpha=1e-4, act=act_stochastic_continuous_2, recurrent=True)
 #"""
 
 ### Recurrent REINFORCE with baseline LSTM Discrete Action Space
@@ -86,11 +85,11 @@ value_function = FFDiscrete(observation_space=total_num_features, action_space=1
 scores, actions = reinforce_baseline(policy, value_function, te, act=act_stochastic_discrete, alpha_policy=1e-4, alpha_vf=1e-5, recurrent=True)
 #"""
 
-### Recurrent REINFORCE with baseline LSTM Continuous Action Space
+### Recurrent REINFORCE with baseline LSTM Continuous Action Space decreasing std as exploration rate
 """
-policy = ALSTMContinuous(observation_space=total_num_features, n_layers=2, dropout=0.1).to(device)
+policy = ALSTMDiscrete(observation_space=total_num_features, action_space=1, n_layers=2, dropout=0.1).to(device)
 value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
-scores, actions = reinforce_baseline(policy, value_function, te, act=act_stochastic_continuous, alpha_policy=1e-4, alpha_vf=1e-5, recurrent=True)
+scores, actions = reinforce_baseline(policy, value_function, te, act=act_stochastic_continuous_2, exploration_min=0.2, alpha_policy=1e-4, alpha_vf=1e-4, recurrent=True, num_episodes=2001)
 #"""
 
 ### REINFORCE Conv
@@ -99,10 +98,10 @@ policy = AConvDiscrete(observation_space=total_num_features).to(device)
 scores, actions = reinforce(policy, te, act=act_stochastic_discrete, alpha=1e-4)
 #"""
 
-### REINFORCE Conv Continuous Action Space
+### REINFORCE Conv Continuous Action Space decreasing std as exploration rate
 """
-policy = AConvContinuous(observation_space=total_num_features).to(device)
-scores, actions = reinforce(policy, te, act=act_stochastic_continuous, alpha=1e-5)
+policy = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
+scores, actions = reinforce(policy, te, act=act_stochastic_continuous_2, exploration_min=0.1, alpha=1e-4, num_episodes=2001)
 #"""
 
 ### Recurrent REINFORCE Conv LSTM 
@@ -111,10 +110,10 @@ policy = AConvLSTMDiscrete(observation_space=total_num_features, num_lstm_layers
 scores, actions = reinforce(policy, te, act=act_stochastic_discrete, alpha=1e-4, recurrent=True, print_freq=1)
 #"""
 
-### Recurrent REINFORCE Conv LSTM Continuous Action Space
+### Recurrent REINFORCE Conv LSTM Continuous Action Space decreasing std as exploration rate
 """
-policy = AConvLSTMContinuous(observation_space=total_num_features, num_lstm_layers=2).to(device)
-scores, actions = reinforce(policy, te, act=act_stochastic_continuous, alpha=1e-4, recurrent=True, print_freq=1)
+policy = AConvLSTMDiscrete(observation_space=total_num_features, action_space=1, num_lstm_layers=2).to(device)
+scores, actions = reinforce(policy, te, act=act_stochastic_continuous_2, exploration_min=0.1, alpha=1e-4, recurrent=True, print_freq=1)
 #"""
 
 ### DQN 
@@ -132,23 +131,17 @@ scores, actions = deep_q_network(q_net, te, act=act_DQN, batch_size=64, alpha=1e
 #"""
 
 ### DDPG
-#"""
+"""
 #actor = AConvLSTMDiscrete(observation_space=total_num_features, action_space=1).to(device)
 #actor = ALSTMDiscrete(observation_space=total_num_features, action_space=1, n_layers=2).to(device)
 #actor = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
 actor = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
 #critic = CConvSA(observation_space=total_num_features).to(device)
 critic = CFFSA(observation_space=total_num_features).to(device)
-scores, actions = deep_determinstic_policy_gradient(actor, critic, te, act=act_DDPG, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, recurrent=False)
+#scores, actions = deep_determinstic_policy_gradient(actor, critic, te, act=act_DDPG, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, recurrent=False)
+scores, actions = deep_determinstic_policy_gradient(actor, critic, te, act=act_DDPG_portfolio, processing=action_transform, batch_size=128, alpha_actor=1e-5, alpha_critic=1e-3, num_episodes=401, recurrent=False)
 #"""
 
-### PPO Linear - idea doesnt fit the problem at all
-"""
-actor = FFDiscrete(observation_space=total_num_features).to(device)
-#critic = LinearDiscrete(observation_space=total_num_features, action_space=3).to(device)
-critic = CFFSA(observation_space=total_num_features, action_space=1).to(device)
-scores, actions = proximal_policy_optimization(actor, critic, te, act=act_stochastic_discrete, batch_size=32, alpha_actor=1e-3, alpha_critic=1e-5, num_episodes=1001, recurrent=False)
-#"""
 
 ### PLOTS
 """
@@ -162,19 +155,19 @@ plt.show()
 #"""
 
 with np.printoptions(threshold=np.inf):
-    print(actions[-1])
+    print(actions[-1].flatten())
 
 correct_actions = np.sign(prices[0][1:] - prices[0][:-1])
 print(correct_actions)
-print(correct_actions == actions[-1])
-print(sum(correct_actions == actions[-1]) - len(correct_actions))
+print(correct_actions == actions[-1].flatten())
+print(sum(correct_actions == actions[-1].flatten()) - len(correct_actions))
 
 retrn = 0
 optimal_rertn = 0
 prev_p = prices[0][0]
 prev_a = 0
 prev_a_optimal = 0
-for a, p, oa in zip(actions[-1], prices[0][1:], correct_actions):
+for a, p, oa in zip(actions[-1].flatten(), prices[0][1:], correct_actions):
     retrn += a * (p - prev_p) - (prev_p * 0.002 * abs(a - prev_a))
     optimal_rertn += oa * (p - prev_p) - (prev_p * 0.002 * abs(oa - prev_a_optimal))
     prev_p = p

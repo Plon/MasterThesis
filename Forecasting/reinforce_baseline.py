@@ -16,13 +16,15 @@ def get_policy_and_value_loss(value_function, state_batch, reward_batch, log_pro
     return policy_loss, vf_loss
 
 
-def reinforce_baseline(policy_network: torch.nn.Module, value_function: torch.nn.Module, env, act, alpha_policy=1e-3, alpha_vf=1e-5, weight_decay=1e-5, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
+def reinforce_baseline(policy_network: torch.nn.Module, value_function: torch.nn.Module, env, act, alpha_policy=1e-3, alpha_vf=1e-5, weight_decay=1e-5, exploration_rate=1, exploration_decay=(1-1e-4), exploration_min=0, num_episodes=1000, max_episode_length=np.iinfo(np.int32).max, train=True, print_res=True, print_freq=100, recurrent=False) -> tuple[np.ndarray, np.ndarray]: 
     optimizer_policy = optim.Adam(policy_network.parameters(), lr=alpha_policy, weight_decay=weight_decay)
     optimizer_vf = optim.Adam(value_function.parameters(), lr=alpha_vf, weight_decay=weight_decay)
     reward_history = []
     action_history = []
 
     if not train:
+        exploration_min = 0
+        exploration_rate = exploration_min
         policy_network.eval()
         value_function.eval()
     else:
@@ -38,7 +40,7 @@ def reinforce_baseline(policy_network: torch.nn.Module, value_function: torch.nn
         hx = None
 
         for _ in range(max_episode_length):
-            action, log_prob, hx = act(policy_network, state, hx, recurrent) #A_{t-1}
+            action, log_prob, hx = act(policy_network, state, hx, recurrent, exploration_rate) #A_{t-1}
             state, reward, done, _ = env.step(action) # S_t, R_t 
             
             if done:
@@ -48,6 +50,7 @@ def reinforce_baseline(policy_network: torch.nn.Module, value_function: torch.nn
             rewards.append(reward) 
             log_probs.append(log_prob)
             states.append(torch.from_numpy(state).float().unsqueeze(0).to(device))
+            exploration_rate = max(exploration_rate*exploration_decay, exploration_min)
 
         if train:
             reward_batch = torch.FloatTensor(rewards)

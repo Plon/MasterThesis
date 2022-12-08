@@ -1,17 +1,8 @@
-
-# takes a n number of instruments as input
-# returns softmax weights of n instruments -> no short 
-# for the moment optimizes for sharpe
-# will probably have to change some of the rl algos
-
-# should a unique neural net output one likelihood per instrument and then softmax on all, 
-# or should it output all the outputs from one net?
-
 import torch
 torch.manual_seed(0)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 import numpy as np
-from networks import AConvContinuous, AConvDiscrete, AConvLSTMContinuous, AConvLSTMDiscrete, AFFContinuous, FFDiscrete, ALSTMContinuous, ALSTMDiscrete, CConvSA, CFFSA, LinearDiscrete, LinearContinuous
+from networks import AConvDiscrete, AConvLSTMDiscrete, FFDiscrete, ALSTMDiscrete, CConvSA, CFFSA, LinearDiscrete
 from reinforce import reinforce
 from deep_q_network import deep_q_network
 from deep_deterministic_policy_gradient import deep_determinstic_policy_gradient
@@ -20,7 +11,7 @@ import plotly.express as px
 import matplotlib.pyplot as plt
 from rl_portfolio_environment import PortfolioEnvironment
 from create_state_vector import get_states
-from action_selection import act_stochastic_portfolio, act_stochastic_portfolio_long, act_DDPG_portfolio, act_DDPG_portfolio_long
+from action_selection import act_stochastic_portfolio, act_stochastic_portfolio_long, act_DDPG_portfolio, act_DDPG_portfolio_long, action_transform, action_softmax_transform
 
 #instruments = ["CL=F", "NG=F"] #WTI crude futures, Natural gas futures
 instruments = ["CL=F", "NG=F", "ALI=F"] #WTI crude futures, Natural gas futures, Aluminium futures
@@ -38,11 +29,6 @@ pe = PortfolioEnvironment(states, num_instruments=num_instruments, num_prev_obse
 
 
 
-# can be an idea to decay std instead of random exploration. 
-# maybe implement a safety mechanism that clips gradients
-# fix ddpg softmax portfolio
-
-
 ### reinforce linear long short 
 """
 policy = LinearDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
@@ -54,7 +40,7 @@ scores, actions = reinforce(policy, pe, act=act_stochastic_portfolio, alpha=1e-2
 """
 policy = LinearDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
 #policy = AConvDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
-scores, actions = reinforce(policy, pe, act=act_stochastic_portfolio_long, alpha=1e-2, num_episodes=2001)
+scores, actions = reinforce(policy, pe, act=act_stochastic_portfolio_long, alpha=1e-2, num_episodes=1001)
 #"""
 
 ### reinforce feedforward 
@@ -79,14 +65,12 @@ scores, actions = reinforce(policy, pe, act=act_stochastic_portfolio_long, alpha
 #"""
 
 ### reinforce feedwordward with baseline
-# doesnt make sense to talk about state value in this context...
 """
 policy = FFDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
 #policy = AConvDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
 value_function = FFDiscrete(observation_space=total_num_features, action_space=1).to(device)
 scores, actions = reinforce_baseline(policy, value_function, pe, act=act_stochastic_portfolio,  alpha_policy=1e-3, alpha_vf=1e-5, num_episodes=501)
 #"""
-
 
 ### DDPG
 """
@@ -97,21 +81,37 @@ scores, actions = reinforce_baseline(policy, value_function, pe, act=act_stochas
 actor = FFDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
 #critic = CConvSA(observation_space=total_num_features).to(device)
 critic = CFFSA(observation_space=total_num_features, action_space=num_instruments).to(device)
-scores, actions = deep_determinstic_policy_gradient(actor, critic, pe, act=act_DDPG_portfolio, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, recurrent=False, print_freq=1)
+scores, actions = deep_determinstic_policy_gradient(actor, critic, pe, act=act_DDPG_portfolio, processing=action_transform, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, recurrent=False, print_freq=1)
+#"""
+
+### Recurrent DDPG
+"""
+#actor = AConvLSTMDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
+actor = ALSTMDiscrete(observation_space=total_num_features, action_space=num_instruments, n_layers=2).to(device)
+#critic = CConvSA(observation_space=total_num_features).to(device)
+critic = CFFSA(observation_space=total_num_features, action_space=num_instruments).to(device)
+scores, actions = deep_determinstic_policy_gradient(actor, critic, pe, act=act_DDPG_portfolio, processing=action_transform, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, recurrent=True, print_freq=1)
 #"""
 
 ### DDPG long only
 #"""
-#actor = AConvLSTMDiscrete(observation_space=total_num_features, action_space=1).to(device)
-#actor = ALSTMDiscrete(observation_space=total_num_features, action_space=1, n_layers=2).to(device)
-#actor = AConvDiscrete(observation_space=total_num_features, action_space=1).to(device)
-actor = LinearDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
-#actor = FFDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
+#actor = AConvDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
+#actor = LinearDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
+actor = FFDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
 #critic = CConvSA(observation_space=total_num_features).to(device)
 critic = CFFSA(observation_space=total_num_features, action_space=num_instruments).to(device)
-scores, actions = deep_determinstic_policy_gradient(actor, critic, pe, act=act_DDPG_portfolio_long, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-3, num_episodes=401, recurrent=False, print_freq=1)
+#scores, actions = deep_determinstic_policy_gradient(actor, critic, pe, act=act_DDPG_portfolio_long, processing=action_softmax_transform, batch_size=128, alpha_actor=1e-4, alpha_critic=1e-2, num_episodes=401, recurrent=False, print_freq=1)
+scores, actions = deep_determinstic_policy_gradient(actor, critic, pe, act=act_DDPG_portfolio_long, processing=action_softmax_transform, batch_size=128, alpha_actor=1e-3, alpha_critic=1e-2, num_episodes=401, exploration_min=0.2, recurrent=False, print_freq=1)
 #"""
 
+### recurrent DDPG long only
+"""
+#actor = AConvLSTMDiscrete(observation_space=total_num_features, action_space=num_instruments).to(device)
+actor = ALSTMDiscrete(observation_space=total_num_features, action_space=num_instruments, n_layers=2).to(device)
+#critic = CConvSA(observation_space=total_num_features).to(device)
+critic = CFFSA(observation_space=total_num_features, action_space=num_instruments).to(device)
+scores, actions = deep_determinstic_policy_gradient(actor, critic, pe, act=act_DDPG_portfolio_long, processing=action_softmax_transform, batch_size=128, alpha_actor=1e-3, alpha_critic=1e-2, num_episodes=401, recurrent=True, print_freq=1)
+#"""
 
 
 ### PLOTS

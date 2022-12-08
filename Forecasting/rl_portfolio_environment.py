@@ -56,8 +56,6 @@ class PortfolioEnvironment():
             termination status
             info
         """
-        if type(action) != np.ndarray:
-            action = np.array([action])
         self.current_index += 1 
         assert all(action <= 1.) and all(action >= -1.)
         if self.current_index >= len(self.states): 
