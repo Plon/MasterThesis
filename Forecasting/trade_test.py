@@ -10,12 +10,11 @@ from deep_deterministic_policy_gradient import deep_determinstic_policy_gradient
 from reinforce_baseline import reinforce_baseline
 import plotly.express as px
 import matplotlib.pyplot as plt
-from create_state_vector import get_states
+from create_state_vector import get_states_from_yf
 from action_selection import act_stochastic_discrete, act_DQN, act_DDPG_portfolio, action_transform, action_softmax_transform, act_stochastic_continuous_2
-from proximal_policy_optimization import proximal_policy_optimization
 from rl_portfolio_environment import PortfolioEnvironment
 
-states, prices, _ = get_states(["CL=F"], imb_bars=True)
+states, prices, _ = get_states_from_yf(["CL=F"], imb_bars=True)
 num_instruments = 1
 num_features = states.shape[1]
 num_prev_obs = 2

@@ -10,7 +10,7 @@ from reinforce_baseline import reinforce_baseline
 import plotly.express as px
 import matplotlib.pyplot as plt
 from rl_portfolio_environment import PortfolioEnvironment
-from create_state_vector import get_states
+from create_state_vector import get_states_from_yf
 from action_selection import act_stochastic_portfolio, act_stochastic_portfolio_long, act_DDPG_portfolio, act_DDPG_portfolio_long, action_transform, action_softmax_transform
 
 #instruments = ["CL=F", "NG=F"] #WTI crude futures, Natural gas futures
@@ -19,7 +19,7 @@ period = "30d"
 interval = "30m"
 riskfree_asset = True
 num_instruments = len(instruments) + int(riskfree_asset) # +1 if riskfree asset
-states, prices, _ = get_states(instruments, period, interval, imb_bars=False, riskfree_asset=riskfree_asset)
+states, prices, _ = get_states_from_yf(instruments, period, interval, imb_bars=False, riskfree_asset=riskfree_asset)
 
 num_features = states.shape[1]
 num_prev_obs = 2
@@ -28,6 +28,7 @@ total_num_features = (num_features + num_instruments) * num_prev_obs
 pe = PortfolioEnvironment(states, num_instruments=num_instruments, num_prev_observations=num_prev_obs)
 
 
+# remember to add initial portfolio weight 0
 
 ### reinforce linear long short 
 """
